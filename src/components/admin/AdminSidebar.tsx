@@ -1,4 +1,4 @@
-import { LayoutDashboard, ShoppingCart, LogOut, Ticket, ShoppingBag, RefreshCw } from "lucide-react";
+import { LayoutDashboard, ShoppingCart, LogOut, Ticket, ShoppingBag, RefreshCw, Factory } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
 import { signOutAdmin } from "@/lib/adminAuth";
@@ -20,6 +20,7 @@ import { BRAND } from "@/lib/brand";
 const items = [
   { title: "Dashboard", url: "/admin", icon: LayoutDashboard },
   { title: "Orders", url: "/admin/orders", icon: ShoppingCart },
+  { title: "Production", url: "/admin/production", icon: Factory },
   { title: "Coupons", url: "/admin/coupons", icon: Ticket },
   { title: "Abandoned Carts", url: "/admin/abandoned", icon: ShoppingBag },
   { title: "Regenerations", url: "/admin/regenerations", icon: RefreshCw },

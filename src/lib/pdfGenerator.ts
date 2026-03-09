@@ -447,7 +447,7 @@ function renderLegendPage(doc: jsPDF, options: PdfOptions, colorCounts: number[]
   y += 5;
 
   const colsPerSide = Math.ceil(numColors / 2);
-  const rowH = 9;
+  const rowH = 10;
   const col1X = 14;
   const col2X = pageW / 2 + 4;
   const colW = pageW / 2 - 18;
@@ -473,24 +473,33 @@ function renderLegendPage(doc: jsPDF, options: PdfOptions, colorCounts: number[]
     doc.setTextColor(255, 255, 255);
     doc.text(COLOR_LETTERS[i], colX + 11, rowY + 2.5, { align: "center" });
 
+    // Color name
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(7);
+    doc.setFontSize(6.5);
     doc.setTextColor(...BRAND.charcoal);
-    doc.text(color.name, colX + 17, rowY + 1);
+    doc.text(color.name, colX + 17, rowY + 0.8);
 
-    const pct = ((colorCounts[i] / totalPixels) * 100).toFixed(1);
+    // Paint reference — what to buy at the store
     doc.setFont("helvetica", "normal");
     doc.setFontSize(5.5);
-    doc.setTextColor(...BRAND.warmGray);
-    doc.text(`${colorCounts[i]} (${pct}%)`, colX + 17, rowY + 4.5);
+    doc.setTextColor(...BRAND.burgundy);
+    doc.text(`→ ${color.ref}`, colX + 17, rowY + 3.8);
 
+    // Usage percentage
+    const pct = ((colorCounts[i] / totalPixels) * 100).toFixed(1);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(5);
+    doc.setTextColor(...BRAND.warmGray);
+    doc.text(`${pct}%`, colX + 17, rowY + 6.2);
+
+    // Usage bar
     const barX = colX + colW - 18;
     const barW = 16;
     const barFill = (colorCounts[i] / totalPixels) * barW;
     doc.setFillColor(...BRAND.lightGray);
-    doc.roundedRect(barX, rowY + 3, barW, 2, 0.5, 0.5, "F");
+    doc.roundedRect(barX, rowY + 3.5, barW, 2, 0.5, 0.5, "F");
     doc.setFillColor(r, g, b);
-    doc.roundedRect(barX, rowY + 3, Math.max(barFill, 0.5), 2, 0.5, 0.5, "F");
+    doc.roundedRect(barX, rowY + 3.5, Math.max(barFill, 0.5), 2, 0.5, 0.5, "F");
   });
 
   // ─── Section Map ───────────────────────────────────────────────────
@@ -570,11 +579,10 @@ function renderLegendPage(doc: jsPDF, options: PdfOptions, colorCounts: number[]
   doc.setFontSize(6.5);
   doc.setTextColor(...BRAND.charcoal);
   const guideLines = [
-    "• Each cell shows a letter (A, B, C...)",
-    "• Match the letter to this color legend",
-    "• Cells are tinted for quick reference",
-    "• Work one section at a time",
-    "• Start with lighter colors first",
+    "• Each cell shows a letter (A, B, C...) — match it to the legend above",
+    "• The arrow (→) shows the exact acrylic paint name to buy",
+    "• Cells are tinted for quick visual reference",
+    "• Work one section at a time, start with lighter colors",
   ];
   guideLines.forEach((line, i) => {
     doc.text(line, 18, guideY + 8 + i * 4);

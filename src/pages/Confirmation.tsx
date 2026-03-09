@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { CheckCircle, Home, Copy, FileText, Truck, Package, MapPin, Share2, Check, Gift, Users } from "lucide-react";
 import { RegenerationRequestForm } from "@/components/shared/RegenerationRequestForm";
 import { BRAND, buildTrackUrl } from "@/lib/brand";
+import { getKitDisplayLabel } from "@/lib/kitCatalog";
 
 function ConfettiParticle({ delay, color }: { delay: number; color: string }) {
   const left = Math.random() * 100;
@@ -84,7 +85,20 @@ const Confirmation = () => {
   };
 
   const shareWhatsApp = () => {
-    const msg = `${t.confirmation.title} 🎨\n${t.confirmation.orderRef}: ${order.orderRef}`;
+    const sizeLabel = order.selectedSize ? getKitDisplayLabel(order.selectedSize) : "Kit";
+    const styleLabel = order.selectedStyle === "original" ? "Original" :
+      order.selectedStyle === "vintage" ? "Vintage" : "Pop Art";
+    const trackUrl = buildTrackUrl(order.orderRef, order.instructionCode, window.location.origin);
+    const msg = [
+      `🎨 Ma commande ${BRAND.name} est confirmée !`,
+      ``,
+      `📦 Réf : ${order.orderRef}`,
+      `🔑 Code kit : ${order.instructionCode}`,
+      `📐 Format : ${sizeLabel}`,
+      `🖌️ Style : ${styleLabel}`,
+      ``,
+      `Suivre ma commande : ${trackUrl}`,
+    ].join("\n");
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
   };
 

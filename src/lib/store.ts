@@ -8,6 +8,13 @@ import { isCreateOrderPayloadTooLarge, optimizeOrderImageSource } from "@/lib/or
 export type OrderCategory = "classic" | "family" | "kids_dream" | "pet";
 export type KitSize = CatalogKitSize;
 export type ArtStyle = "original" | "vintage" | "pop_art";
+export type AddOnId = "extra_paint" | "gift_wrap" | "frame";
+
+export const ADD_ONS = [
+  { id: "extra_paint" as AddOnId, label: "Jeu de peintures supplémentaire", description: "Un jeu de rechange pour ne jamais manquer de couleurs.", price: 49, icon: "🎨" },
+  { id: "gift_wrap" as AddOnId, label: "Emballage cadeau premium", description: "Boîte élégante avec ruban et carte personnalisée.", price: 29, icon: "🎁" },
+  { id: "frame" as AddOnId, label: "Cadre en bois", description: "Cadre en bois naturel pour exposer votre chef-d'œuvre.", price: 79, icon: "🖼️" },
+] as const;
 
 export interface ContactInfo {
   firstName: string;
@@ -30,6 +37,7 @@ export interface OrderState {
   selectedStyle: ArtStyle | null;
   stylePreviewUrl: string;
   selectedSize: KitSize | null;
+  addOns: AddOnId[];
   contact: ContactInfo;
   shipping: ShippingInfo;
   orderRef: string;
@@ -56,6 +64,7 @@ const initialState: OrderState = {
   selectedStyle: null,
   stylePreviewUrl: "",
   selectedSize: null,
+  addOns: [],
   contact: { ...defaultContact },
   shipping: { ...defaultShipping },
   orderRef: "",
@@ -76,6 +85,7 @@ interface OrderContextType {
   setCroppedArea: (area: Area) => void;
   setStyle: (style: ArtStyle, previewUrl: string) => void;
   setSize: (size: KitSize) => void;
+  setAddOns: (addOns: AddOnId[]) => void;
   setContact: (contact: ContactInfo) => void;
   setShipping: (shipping: ShippingInfo) => void;
   setGift: (isGift: boolean, message: string) => void;
@@ -130,6 +140,7 @@ export function OrderProvider({ children }: { children: ReactNode }) {
   const setCroppedArea = useCallback((croppedArea: Area) => setOrder((o) => ({ ...o, croppedArea })), []);
   const setStyle = useCallback((selectedStyle: ArtStyle, stylePreviewUrl: string) => setOrder((o) => ({ ...o, selectedStyle, stylePreviewUrl })), []);
   const setSize = useCallback((selectedSize: KitSize) => setOrder((o) => ({ ...o, selectedSize })), []);
+  const setAddOns = useCallback((addOns: AddOnId[]) => setOrder((o) => ({ ...o, addOns })), []);
   const setContact = useCallback((contact: ContactInfo) => setOrder((o) => ({ ...o, contact })), []);
   const setShipping = useCallback((shipping: ShippingInfo) => setOrder((o) => ({ ...o, shipping })), []);
   const setGift = useCallback((isGift: boolean, giftMessage: string) => setOrder((o) => ({ ...o, isGift, giftMessage })), []);
@@ -232,7 +243,7 @@ export function OrderProvider({ children }: { children: ReactNode }) {
 
   return React.createElement(
     OrderContext.Provider,
-    { value: { order, setCategory, setPhoto, removePhoto, setCroppedArea, setStyle, setSize, setContact, setShipping, setGift, setDedicationText, setDreamJob, setAiGeneratedUrl, confirmOrder, resetOrder } },
+    { value: { order, setCategory, setPhoto, removePhoto, setCroppedArea, setStyle, setSize, setAddOns, setContact, setShipping, setGift, setDedicationText, setDreamJob, setAiGeneratedUrl, confirmOrder, resetOrder } },
     children,
   );
 }

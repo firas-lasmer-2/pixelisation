@@ -4,7 +4,7 @@ import { Area } from "react-easy-crop";
 import { Navbar } from "@/components/shared/Navbar";
 import { Footer } from "@/components/landing/Footer";
 import { useTranslation } from "@/i18n";
-import { useOrder, getPhoto, PRICING, TUNISIAN_GOVERNORATES, CATEGORY_META, DREAM_JOBS, type KitSize, type ArtStyle, type ContactInfo, type ShippingInfo, type OrderCategory } from "@/lib/store";
+import { useOrder, getPhoto, PRICING, TUNISIAN_GOVERNORATES, CATEGORY_META, DREAM_JOBS, ADD_ONS, type KitSize, type ArtStyle, type ContactInfo, type ShippingInfo, type OrderCategory } from "@/lib/store";
 import {
   DEFAULT_PUBLIC_KIT,
   KIT_TONE_STYLES,
@@ -36,7 +36,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   ArrowLeft, ArrowRight, Check, Truck, CreditCard, Package,
   Camera, Palette, User, MapPin, ShieldCheck, Sparkles, CheckCircle,
-  Layers, Star, Gift, Edit3, Crown, Upload, Tag, X, Wand2, Loader2,
+  Layers, Star, Gift, Edit3, Crown, Upload, Tag, X, Wand2, Loader2, ShoppingBag,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { STORAGE_KEYS } from "@/lib/brand";
@@ -74,6 +74,7 @@ const STEP_META_BY_CATEGORY: Record<OrderCategory, StepMetaItem[]> = {
   classic: [
     { label: "Expérience", icon: Sparkles },
     { label: "Format", icon: Package },
+    { label: "Extras", icon: Gift },
     { label: "Photo", icon: Upload },
     { label: "Recadrage", icon: Camera },
     { label: "Style", icon: Palette },
@@ -82,6 +83,7 @@ const STEP_META_BY_CATEGORY: Record<OrderCategory, StepMetaItem[]> = {
   family: [
     { label: "Expérience", icon: Sparkles },
     { label: "Format", icon: Package },
+    { label: "Extras", icon: Gift },
     { label: "Photos", icon: Upload },
     { label: "Fusion", icon: Wand2 },
     { label: "Recadrage", icon: Camera },
@@ -91,6 +93,7 @@ const STEP_META_BY_CATEGORY: Record<OrderCategory, StepMetaItem[]> = {
   kids_dream: [
     { label: "Expérience", icon: Sparkles },
     { label: "Format", icon: Package },
+    { label: "Extras", icon: Gift },
     { label: "Photo", icon: Upload },
     { label: "Magie", icon: Wand2 },
     { label: "Recadrage", icon: Camera },
@@ -100,6 +103,7 @@ const STEP_META_BY_CATEGORY: Record<OrderCategory, StepMetaItem[]> = {
   pet: [
     { label: "Expérience", icon: Sparkles },
     { label: "Format", icon: Package },
+    { label: "Extras", icon: Gift },
     { label: "Photo", icon: Upload },
     { label: "Portrait", icon: Wand2 },
     { label: "Recadrage", icon: Camera },
@@ -131,7 +135,7 @@ function StepIndicator({
         <p className="text-xs text-muted-foreground">Étape {Math.min(currentStep, totalSteps)} / {totalSteps}</p>
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-3 xl:grid-cols-7">
+      <div className={`grid gap-2 sm:grid-cols-4 ${totalSteps <= 7 ? "xl:grid-cols-7" : "xl:grid-cols-8"}`}>
         {stepMeta.map((item, index) => {
           const stepNumber = index + 1;
           const Icon = item.icon;
@@ -182,7 +186,7 @@ const Studio = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const resumeSessionId = searchParams.get("resume")?.trim() || null;
-  const { order, setCategory, setPhoto, removePhoto, setCroppedArea, setStyle, setSize, setContact, setShipping, setGift, setDedicationText, setDreamJob, setAiGeneratedUrl, confirmOrder } = useOrder();
+  const { order, setCategory, setPhoto, removePhoto, setCroppedArea, setStyle, setSize, setAddOns, setContact, setShipping, setGift, setDedicationText, setDreamJob, setAiGeneratedUrl, confirmOrder } = useOrder();
   const [step, setStep] = useState(1);
   const [processing, setProcessing] = useState(false);
   const [aiGenerating, setAiGenerating] = useState(false);
@@ -442,9 +446,15 @@ const Studio = () => {
     return Math.min(appliedCoupon.discount_value, price);
   };
 
+  const getAddOnsTotal = () =>
+    order.addOns.reduce((sum, id) => {
+      const addon = ADD_ONS.find((a) => a.id === id);
+      return sum + (addon?.price || 0);
+    }, 0);
+
   const getFinalPrice = () => {
     if (!order.selectedSize) return 0;
-    return PRICING[order.selectedSize] - getDiscount();
+    return PRICING[order.selectedSize] - getDiscount() + getAddOnsTotal();
   };
 
   const goToStep = (newStep: number) => {
@@ -454,10 +464,10 @@ const Studio = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  /* Step 3: image selected → go to step 4 (crop) */
+  /* Step 4 (upload): image selected → go to step 5 (crop) */
   const handleImageSelected = useCallback((dataUrl: string) => {
     setPhoto(dataUrl, 0);
-    goToStep(4);
+    goToStep(5);
   }, [setPhoto]);
 
   /* Step 4: crop complete → process → go to next step */
@@ -494,7 +504,7 @@ const Studio = () => {
         },
       });
       // For AI categories, the style step is one more
-      goToStep(isAICategory ? 6 : 5);
+      goToStep(isAICategory ? 7 : 6);
     } catch (err) {
       console.error("Processing failed:", err);
       setProcessing(false);
@@ -541,12 +551,8 @@ const Studio = () => {
         },
       });
       toast({ title: "Image IA générée ✨", description: "Votre création est prête ! Passez au recadrage." });
-      // Move to crop step (step 4 for AI categories after AI step 5)
-      // Actually AI step is step 5, then we go back to crop at step 4
-      // Wait - let me re-think the flow
-      // For AI: 1=Cat, 2=Kit, 3=Upload, 4=AI Magic, 5=Crop, 6=Style, 7=Confirm
-      // That makes more sense - AI before crop
-      goToStep(5); // Go to crop after AI
+      // AI: 1=Cat, 2=Kit, 3=Upsell, 4=Upload, 5=AI, 6=Crop, 7=Style, 8=Confirm
+      goToStep(6); // Go to crop after AI
     } catch (err: any) {
       console.error("AI generation failed:", err);
       void trackFunnelEvent({
@@ -657,17 +663,17 @@ const Studio = () => {
     ? "animate-[slide-in-right_0.35s_ease-out]"
     : "animate-[slide-in-left_0.35s_ease-out]";
 
-  const showHero = !processing && step !== 4 && step !== 5;
-
-  // Determine which step number maps to which content
-  // Classic: 1=Cat, 2=Kit, 3=Upload, 4=Crop, 5=Style, 6=Confirm
-  // AI:      1=Cat, 2=Kit, 3=Upload, 4=AI, 5=Crop, 6=Style, 7=Confirm
-  const getConfirmStep = () => isAICategory ? 7 : 6;
-  const getStyleStep = () => isAICategory ? 6 : 5;
-  const getCropStep = () => isAICategory ? 5 : 4;
-  const getAIStep = () => 4; // Only for AI categories
-  const getUploadStep = () => 3;
+  // Classic: 1=Cat, 2=Kit, 3=Upsell, 4=Upload, 5=Crop,  6=Style, 7=Confirm
+  // AI:      1=Cat, 2=Kit, 3=Upsell, 4=Upload, 5=AI,   6=Crop,  7=Style, 8=Confirm
   const getKitStep = () => 2;
+  const getUpsellStep = () => 3;
+  const getUploadStep = () => 4;
+  const getAIStep = () => 5; // Only for AI categories
+  const getCropStep = () => isAICategory ? 6 : 5;
+  const getStyleStep = () => isAICategory ? 7 : 6;
+  const getConfirmStep = () => isAICategory ? 8 : 7;
+
+  const showHero = !processing && step !== getCropStep() && step !== getAIStep();
 
   const photo = getPhoto(order);
   const photoForProcessing = order.aiGeneratedUrl || photo;
@@ -902,7 +908,89 @@ const Studio = () => {
                 </div>
               )}
               {/* ═══════════════════════════════════════════
-                  STEP 3: Upload Photo(s)
+                  STEP 3: Upsell / Extras
+                 ═══════════════════════════════════════════ */}
+              {step === getUpsellStep() && (
+                <div className="space-y-8">
+                  <SectionHeading
+                    title="Complétez votre kit"
+                    subtitle="Optionnel — ajoutez des extras pour une expérience encore plus complète."
+                  />
+
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    {ADD_ONS.map((addon) => {
+                      const isSelected = order.addOns.includes(addon.id);
+                      return (
+                        <button
+                          key={addon.id}
+                          type="button"
+                          onClick={() => {
+                            const newAddOns = isSelected
+                              ? order.addOns.filter((id) => id !== addon.id)
+                              : [...order.addOns, addon.id];
+                            setAddOns(newAddOns);
+                          }}
+                          className={`group relative rounded-3xl border-2 p-5 text-left transition-all duration-300 hover:shadow-lg ${
+                            isSelected
+                              ? "border-primary bg-primary/[0.03] shadow-lg"
+                              : "border-border/60 bg-card hover:border-primary/30"
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-3 mb-3">
+                            <span className="text-3xl">{addon.icon}</span>
+                            <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
+                              isSelected ? "border-primary bg-primary" : "border-border"
+                            }`}>
+                              {isSelected && <Check className="h-3.5 w-3.5 text-primary-foreground" />}
+                            </div>
+                          </div>
+                          <h3 className="font-semibold text-sm text-foreground mb-1">{addon.label}</h3>
+                          <p className="text-xs text-muted-foreground mb-4">{addon.description}</p>
+                          <div className="flex items-baseline gap-1">
+                            <span className="text-xl font-bold text-primary">+{addon.price}</span>
+                            <span className="text-sm text-muted-foreground">DT</span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {order.addOns.length > 0 && (
+                    <div className="rounded-2xl border border-primary/20 bg-primary/5 px-5 py-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <ShoppingBag className="h-4 w-4 text-primary" />
+                          <span className="text-sm font-semibold text-primary">
+                            {order.addOns.length} extra{order.addOns.length > 1 ? "s" : ""} sélectionné{order.addOns.length > 1 ? "s" : ""}
+                          </span>
+                        </div>
+                        <span className="text-sm font-bold text-primary">
+                          +{ADD_ONS.filter((a) => order.addOns.includes(a.id)).reduce((s, a) => s + a.price, 0)} DT
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between">
+                    <Button variant="outline" onClick={() => goToStep(getKitStep())} className="gap-2">
+                      <BackIcon className="h-4 w-4" /> Retour
+                    </Button>
+                    <Button
+                      onClick={() => goToStep(getUploadStep())}
+                      className="gap-2 btn-premium text-primary-foreground border-0 px-8"
+                      size="lg"
+                    >
+                      {order.addOns.length > 0
+                        ? `Continuer avec ${order.addOns.length} extra${order.addOns.length > 1 ? "s" : ""}`
+                        : "Continuer sans extras"}{" "}
+                      <NextIcon className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* ═══════════════════════════════════════════
+                  STEP 4: Upload Photo(s)
                  ═══════════════════════════════════════════ */}
               {step === getUploadStep() && !processing && (
                 <div>
@@ -974,7 +1062,7 @@ const Studio = () => {
                   )}
 
                   <div className="mt-8 flex justify-between">
-                    <Button variant="outline" onClick={() => goToStep(2)} className="gap-2">
+                    <Button variant="outline" onClick={() => goToStep(getUpsellStep())} className="gap-2">
                       <BackIcon className="h-4 w-4" /> Retour
                     </Button>
                     {order.category !== "classic" && (
@@ -1067,7 +1155,7 @@ const Studio = () => {
                   </div>
 
                   <div className="mt-8 flex justify-start">
-                    <Button variant="outline" onClick={() => goToStep(3)} className="gap-2">
+                    <Button variant="outline" onClick={() => goToStep(getUploadStep())} className="gap-2">
                       <BackIcon className="h-4 w-4" /> Retour
                     </Button>
                   </div>
@@ -1338,6 +1426,16 @@ const Studio = () => {
                               <span className="text-muted-foreground">Livraison estimée</span>
                               <span className="font-medium text-xs">{estimatedDelivery()}</span>
                             </div>
+                            {order.addOns.length > 0 && (
+                              <div className="space-y-1 pt-1">
+                                {ADD_ONS.filter((a) => order.addOns.includes(a.id)).map((addon) => (
+                                  <div key={addon.id} className="flex items-center justify-between text-xs text-muted-foreground">
+                                    <span>{addon.icon} {addon.label}</span>
+                                    <span className="font-medium">+{addon.price} DT</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
 
                           {/* Promo code */}

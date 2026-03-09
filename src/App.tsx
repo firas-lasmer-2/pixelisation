@@ -20,6 +20,7 @@ import AdminOrders from "./pages/admin/AdminOrders";
 import AdminCoupons from "./pages/admin/AdminCoupons";
 import AdminAbandonedCarts from "./pages/admin/AdminAbandonedCarts";
 import AdminRegenerations from "./pages/admin/AdminRegenerations";
+import AdminProduction from "./pages/admin/AdminProduction";
 import { AdminLayout } from "./components/admin/AdminLayout";
 import { WhatsAppButton } from "./components/shared/WhatsAppButton";
 
@@ -51,6 +52,7 @@ const App = () => (
               <Route path="/admin/coupons" element={<AdminLayout><AdminCoupons /></AdminLayout>} />
               <Route path="/admin/abandoned" element={<AdminLayout><AdminAbandonedCarts /></AdminLayout>} />
               <Route path="/admin/regenerations" element={<AdminLayout><AdminRegenerations /></AdminLayout>} />
+              <Route path="/admin/production" element={<AdminLayout><AdminProduction /></AdminLayout>} />
 
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />

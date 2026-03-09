@@ -1,5 +1,6 @@
 export interface PaletteColor {
   name: string;
+  ref: string;       // Common acrylic paint name — what to buy at the store
   r: number;
   g: number;
   b: number;
@@ -46,133 +47,63 @@ function rgbToLab(r: number, g: number, b: number): [number, number, number] {
   return xyzToLab(x, y, z);
 }
 
-const c = (name: string, hex: string): PaletteColor => {
+const c = (name: string, hex: string, ref: string): PaletteColor => {
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
   const b = parseInt(hex.slice(5, 7), 16);
   const [L, a, bLab] = rgbToLab(r, g, b);
-  return { name, r, g, b, hex, L, a, bLab };
+  return { name, ref, r, g, b, hex, L, a, bLab };
 };
 
-// ─── DMC-style palettes: fewer, perceptually distinct colors ────────────
-// Each palette uses Delta-E > 10 between neighbors for easy distinction
+// ─── 8-color palettes — perceptually spaced, all sourced as standard acrylics ─
 
 export const PALETTES: Record<string, StylePalette> = {
   original: {
     name: "Original",
-    description: "14-shade grayscale, evenly spaced in L*",
+    description: "8 distinct grays — evenly spaced in L*, easy to tell apart",
     colors: [
-      c("White",          "#F2F2F2"), // L* ~96
-      c("Pearl",          "#DEDEDE"), // L* ~89
-      c("Silver",         "#CACACA"), // L* ~82
-      c("Light Gray",     "#B6B6B6"), // L* ~75
-      c("Ash",            "#A2A2A2"), // L* ~68
-      c("Mid Gray",       "#8E8E8E"), // L* ~61
-      c("Slate",          "#7A7A7A"), // L* ~54
-      c("Steel",          "#686868"), // L* ~47
-      c("Iron",           "#565656"), // L* ~40
-      c("Graphite",       "#444444"), // L* ~33
-      c("Charcoal",       "#333333"), // L* ~26
-      c("Dark Gray",      "#232323"), // L* ~19
-      c("Onyx",           "#151515"), // L* ~12
-      c("Black",          "#080808"), // L* ~6
+      // L* steps of ~13 each — Delta-E > 13 between every adjacent pair
+      c("White",       "#F5F5F5", "Titanium White"),       // L* ~96
+      c("Light Gray",  "#C8C8C8", "Light Gray"),           // L* ~80
+      c("Silver",      "#9A9A9A", "Silver Gray"),          // L* ~63
+      c("Medium Gray", "#727272", "Medium Gray"),          // L* ~47
+      c("Dim Gray",    "#505050", "Dim Gray"),             // L* ~34
+      c("Dark Gray",   "#323232", "Dark Gray"),            // L* ~22
+      c("Charcoal",    "#1A1A1A", "Charcoal"),             // L* ~11
+      c("Black",       "#080808", "Mars Black"),           // L* ~4
     ],
   },
   vintage: {
     name: "Vintage",
-    description: "15-color warm sepia, wide Delta-E spacing",
+    description: "8 warm earth tones — all standard artist acrylic colors",
     colors: [
-      c("Cream",          "#F5EDDA"), // Lightest warm
-      c("Ivory",          "#E0D0AA"), // Warm light
-      c("Wheat",          "#CCB580"), // Golden light
-      c("Sand",           "#B89A58"), // Sand
-      c("Goldenrod",      "#A08030"), // Deep gold
-      c("Warm Gray",      "#A09890"), // Neutral warm
-      c("Copper",         "#A06840"), // Copper
-      c("Terra Cotta",    "#8E5838"), // Terra cotta
-      c("Raw Sienna",     "#7A4820"), // Raw sienna
-      c("Medium Gray",    "#706860"), // Mid warm gray
-      c("Rust",           "#884830"), // Rust red
-      c("Brown",          "#5A3818"), // Brown
-      c("Dark Slate",     "#3A4048"), // Cool dark
-      c("Deep Brown",     "#3C2410"), // Deep brown
-      c("Near Black",     "#140C04"), // Near black
+      c("Cream",       "#F5EDDA", "Unbleached Titanium"),  // Warm light base
+      c("Yellow Ochre","#D4AA70", "Yellow Ochre"),         // Classic warm yellow
+      c("Raw Sienna",  "#A07040", "Raw Sienna"),           // Mid warm brown
+      c("Burnt Sienna","#8B4C2A", "Burnt Sienna"),         // Deep warm orange
+      c("Terra Cotta", "#6E3018", "Terra Cotta Red"),      // Warm red-brown
+      c("Raw Umber",   "#503020", "Raw Umber"),            // Neutral dark brown
+      c("Burnt Umber", "#3A2010", "Burnt Umber"),          // Very dark brown
+      c("Near Black",  "#150C04", "Ivory Black"),          // Warm near-black
     ],
   },
   popart: {
     name: "Pop Art",
-    description: "12-color bold Warhol-style, max hue separation",
+    description: "8 vivid Warhol-inspired colors — warm gradient + bold accents",
     colors: [
-      c("Off White",      "#F0E8D8"), // Light base
-      c("Canary",         "#F8E030"), // Yellow
-      c("Lime",           "#58D828"), // Green
-      c("Tangerine",      "#F08828"), // Orange
-      c("Hot Pink",       "#E03080"), // Pink
-      c("Sky Blue",       "#40A8E0"), // Blue
-      c("Red",            "#D82020"), // Red
-      c("Electric Blue",  "#2850D8"), // Deep blue
-      c("Purple",         "#8028C0"), // Purple
-      c("Crimson",        "#901830"), // Dark red
-      c("Dark Teal",      "#104848"), // Dark teal
-      c("Black",          "#181818"), // Black
+      c("White",       "#F8F3EB", "Titanium White"),       // Bright warm white
+      c("Yellow",      "#FFD600", "Cadmium Yellow"),       // Vivid cadmium yellow
+      c("Orange",      "#FF6B00", "Cadmium Orange"),       // Hot cadmium orange
+      c("Red",         "#E81028", "Cadmium Red"),          // Vivid cadmium red
+      c("Magenta",     "#CC0068", "Quinacridone Magenta"), // Hot vivid pink
+      c("Violet",      "#6500B8", "Dioxazine Violet"),     // Deep electric violet
+      c("Blue",        "#0097D8", "Cerulean Blue"),        // Vivid cerulean blue
+      c("Black",       "#0C0A08", "Mars Black"),           // Deep black
     ],
   },
 };
 
-// ─── Compact 12-color palettes for A4 size ──────────────────────────────
-export const COMPACT_PALETTES: Record<string, StylePalette> = {
-  original: {
-    name: "Original Compact",
-    description: "12-shade grayscale, evenly spaced in L*",
-    colors: [
-      c("White",          "#F2F2F2"), // L* ~96
-      c("Pearl",          "#DEDEDE"), // L* ~89
-      c("Silver",         "#CACACA"), // L* ~82
-      c("Light Gray",     "#B6B6B6"), // L* ~75
-      c("Mid Gray",       "#8E8E8E"), // L* ~61
-      c("Slate",          "#7A7A7A"), // L* ~54
-      c("Steel",          "#686868"), // L* ~47
-      c("Iron",           "#565656"), // L* ~40
-      c("Graphite",       "#444444"), // L* ~33
-      c("Charcoal",       "#333333"), // L* ~26
-      c("Dark Gray",      "#232323"), // L* ~19
-      c("Black",          "#080808"), // L* ~6
-    ],
-  },
-  vintage: {
-    name: "Vintage Compact",
-    description: "12-tone warm sepia",
-    colors: [
-      c("Cream",          "#F5EDDA"),
-      c("Ivory",          "#E0D0AA"),
-      c("Wheat",          "#CCB580"),
-      c("Sand",           "#B89A58"),
-      c("Warm Gray",      "#A09890"),
-      c("Copper",         "#A06840"),
-      c("Terra Cotta",    "#8E5838"),
-      c("Raw Sienna",     "#7A4820"),
-      c("Rust",           "#884830"),
-      c("Brown",          "#5A3818"),
-      c("Dark Slate",     "#3A4048"),
-      c("Near Black",     "#140C04"),
-    ],
-  },
-  popart: {
-    name: "Pop Art Compact",
-    description: "10-color bold Warhol-style",
-    colors: [
-      c("Off White",      "#F0E8D8"),
-      c("Canary",         "#F8E030"),
-      c("Tangerine",      "#F08828"),
-      c("Red",            "#D82020"),
-      c("Hot Pink",       "#E03080"),
-      c("Sky Blue",       "#40A8E0"),
-      c("Electric Blue",  "#2850D8"),
-      c("Lime",           "#58D828"),
-      c("Purple",         "#8028C0"),
-      c("Black",          "#181818"),
-    ],
-  },
-};
+// ─── Compact palettes for A4 — same 8 colors, no separate set needed ─────
+export const COMPACT_PALETTES: Record<string, StylePalette> = PALETTES;
 
 export const STYLE_KEYS = Object.keys(PALETTES) as Array<keyof typeof PALETTES>;
