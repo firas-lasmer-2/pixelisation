@@ -119,31 +119,39 @@ export const PALETTES: Record<string, StylePalette> = {
   },
 };
 
-// ─── Compact 8-color palettes for A4 size ──────────────────────────────
+// ─── Compact 12-color palettes for A4 size ──────────────────────────────
 export const COMPACT_PALETTES: Record<string, StylePalette> = {
   original: {
     name: "Original Compact",
-    description: "8-shade grayscale, Delta-E ~13",
+    description: "12-shade grayscale, evenly spaced in L*",
     colors: [
-      c("White",          "#F0F0F0"),
-      c("Light Gray",     "#C8C8C8"),
-      c("Silver",         "#A0A0A0"),
-      c("Mid Gray",       "#7C7C7C"),
-      c("Steel",          "#5C5C5C"),
-      c("Dark Gray",      "#404040"),
-      c("Charcoal",       "#242424"),
-      c("Black",          "#0A0A0A"),
+      c("White",          "#F2F2F2"), // L* ~96
+      c("Pearl",          "#DEDEDE"), // L* ~89
+      c("Silver",         "#CACACA"), // L* ~82
+      c("Light Gray",     "#B6B6B6"), // L* ~75
+      c("Mid Gray",       "#8E8E8E"), // L* ~61
+      c("Slate",          "#7A7A7A"), // L* ~54
+      c("Steel",          "#686868"), // L* ~47
+      c("Iron",           "#565656"), // L* ~40
+      c("Graphite",       "#444444"), // L* ~33
+      c("Charcoal",       "#333333"), // L* ~26
+      c("Dark Gray",      "#232323"), // L* ~19
+      c("Black",          "#080808"), // L* ~6
     ],
   },
   vintage: {
     name: "Vintage Compact",
-    description: "8-tone warm sepia",
+    description: "12-tone warm sepia",
     colors: [
       c("Cream",          "#F5EDDA"),
-      c("Sand",           "#CCB580"),
+      c("Ivory",          "#E0D0AA"),
+      c("Wheat",          "#CCB580"),
+      c("Sand",           "#B89A58"),
       c("Warm Gray",      "#A09890"),
       c("Copper",         "#A06840"),
       c("Terra Cotta",    "#8E5838"),
+      c("Raw Sienna",     "#7A4820"),
+      c("Rust",           "#884830"),
       c("Brown",          "#5A3818"),
       c("Dark Slate",     "#3A4048"),
       c("Near Black",     "#140C04"),
@@ -151,13 +159,15 @@ export const COMPACT_PALETTES: Record<string, StylePalette> = {
   },
   popart: {
     name: "Pop Art Compact",
-    description: "8-color bold Warhol-style",
+    description: "10-color bold Warhol-style",
     colors: [
       c("Off White",      "#F0E8D8"),
       c("Canary",         "#F8E030"),
+      c("Tangerine",      "#F08828"),
       c("Red",            "#D82020"),
       c("Hot Pink",       "#E03080"),
       c("Sky Blue",       "#40A8E0"),
+      c("Electric Blue",  "#2850D8"),
       c("Lime",           "#58D828"),
       c("Purple",         "#8028C0"),
       c("Black",          "#181818"),

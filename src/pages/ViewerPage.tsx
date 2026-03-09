@@ -10,6 +10,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import {
   loadPaintingManifestLocally,
+  normalizePaintingManifest,
   persistPaintingManifestLocally,
   resolveManifestPalette,
   type PaintingManifest,
@@ -56,7 +57,13 @@ const ViewerPage = () => {
         return;
       }
 
-      const remoteManifest = data.manifest as PaintingManifest;
+      const remoteManifest = normalizePaintingManifest(data.manifest, normalizedCode);
+      if (!remoteManifest) {
+        setError(true);
+        setLoading(false);
+        return;
+      }
+
       setManifest(remoteManifest);
       persistPaintingManifestLocally(remoteManifest);
       setLoading(false);
@@ -130,16 +137,6 @@ const ViewerPage = () => {
                         This viewer follows the exact same painting manifest as your PDF guide, so the color letters, section numbering, and progress all stay aligned.
                       </p>
 
-                      {manifest.dedicationText && (
-                        <div className="mt-4 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
-                          <div className="flex items-center gap-2 text-primary">
-                            <Heart className="h-4 w-4" />
-                            <span className="text-xs font-semibold uppercase tracking-[0.14em]">Dedication</span>
-                          </div>
-                          <p className="mt-2 text-sm font-medium">{manifest.dedicationText}</p>
-                        </div>
-                      )}
-
                       <div className="mt-5 grid gap-3 md:grid-cols-4">
                         <div className="rounded-xl border p-3">
                           <div className="flex items-center gap-2 text-xs uppercase tracking-[0.12em] text-muted-foreground">
@@ -166,6 +163,15 @@ const ViewerPage = () => {
                           <p className="mt-2 text-lg font-semibold font-mono">{manifest.instructionCode}</p>
                         </div>
                       </div>
+
+                      {(manifest.dedication || manifest.dedicationText) && (
+                        <div className="mt-5">
+                          <Badge variant="outline" className="gap-1 rounded-full px-3 py-1">
+                            <Heart className="h-3.5 w-3.5" />
+                            Personalized edition
+                          </Badge>
+                        </div>
+                      )}
 
                       <div className="mt-5 flex flex-wrap gap-3">
                         {manifest.orderRef && (

@@ -9,16 +9,24 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { generatePaintByNumbersPDF } from "@/lib/pdfGenerator";
 import { processImage, type ProcessingResult } from "@/lib/imageProcessing";
 import { GridViewer } from "@/components/GridViewer";
 import {
   buildPaintingManifest,
+  normalizePaintingManifest,
   orderStyleToPaletteKey,
   persistPaintingManifestLocally,
   resolveManifestPalette,
   type PaintingManifest,
 } from "@/lib/paintingManifest";
+import {
+  DEDICATION_MAX_LENGTH,
+  normalizeDedicationDraft,
+  sanitizeDedicationText,
+} from "@/lib/dedicationOverlay";
 import { buildViewerUrl, BRAND } from "@/lib/brand";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -35,11 +43,14 @@ import {
   Share2,
   ExternalLink,
   Heart,
+  ChevronDown,
+  PenLine,
+  Sparkles,
 } from "lucide-react";
 
 const Download = () => {
   const { t } = useTranslation();
-  const { order } = useOrder();
+  const { order, setDedicationText } = useOrder();
   const navigate = useNavigate();
   const [generating, setGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -48,6 +59,9 @@ const Download = () => {
   const [processingResult, setProcessingResult] = useState<ProcessingResult | null>(null);
   const [paintingManifest, setPaintingManifest] = useState<PaintingManifest | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [dedicationOpen, setDedicationOpen] = useState(false);
+  const [dedicationDraft, setDedicationDraft] = useState(order.dedicationText || "");
+  const [savingDedication, setSavingDedication] = useState(false);
 
   const dl = t.download;
 
@@ -57,11 +71,23 @@ const Download = () => {
     }
   }, [order, navigate]);
 
-  const kitSize = order.selectedSize === "stamp_kit_40x50" ? "40x50" : order.selectedSize === "stamp_kit_A4" ? "A4" : "30x40";
+  const kitSize = order.selectedSize === "stamp_kit_40x50" ? "40x50"
+    : order.selectedSize === "stamp_kit_A4" ? "A4"
+    : order.selectedSize === "stamp_kit_A3" ? "A3"
+    : order.selectedSize === "stamp_kit_A2" ? "A2"
+    : "30x40";
   const canvasLabel = order.selectedSize ? SIZE_LABELS[order.selectedSize] : "";
   const viewerPath = order.instructionCode ? buildViewerUrl(order.instructionCode, window.location.origin).replace(window.location.origin, "") : "";
+  const sanitizedSavedDedication = useMemo(() => sanitizeDedicationText(order.dedicationText), [order.dedicationText]);
+  const sanitizedDraftDedication = useMemo(() => sanitizeDedicationText(dedicationDraft), [dedicationDraft]);
+  const hasDedication = Boolean(sanitizedDraftDedication || paintingManifest?.dedication?.text);
+  const dedicationDirty = sanitizedDraftDedication !== sanitizedSavedDedication;
 
   const sourceForProcessing = useMemo(() => order.aiGeneratedUrl || getPhoto(order), [order.aiGeneratedUrl, order.photos]);
+
+  useEffect(() => {
+    setDedicationDraft(order.dedicationText || "");
+  }, [order.dedicationText]);
 
   const processIfNeeded = async (): Promise<ProcessingResult> => {
     if (processingResult) return processingResult;
@@ -79,32 +105,72 @@ const Download = () => {
     return selectedResult;
   };
 
-  const ensureManifest = async (): Promise<PaintingManifest> => {
-    if (paintingManifest) return paintingManifest;
+  const persistManifest = async (manifest: PaintingManifest) => {
+    persistPaintingManifestLocally(manifest);
+    setPaintingManifest(manifest);
+
+    if (!order.orderRef || !order.instructionCode) {
+      return manifest;
+    }
+
+    const { data, error: manifestError } = await supabase.functions.invoke("upsert-painting-manifest", {
+      body: {
+        orderRef: order.orderRef,
+        instructionCode: order.instructionCode,
+        manifest,
+      },
+    });
+
+    if (manifestError || data?.error) {
+      throw manifestError || new Error(String(data.error));
+    }
+
+    const normalizedRemoteManifest = normalizePaintingManifest(data.manifest || manifest, order.instructionCode);
+    if (normalizedRemoteManifest) {
+      persistPaintingManifestLocally(normalizedRemoteManifest);
+      setPaintingManifest(normalizedRemoteManifest);
+      return normalizedRemoteManifest;
+    }
+
+    return manifest;
+  };
+
+  const ensureManifest = async (dedicationText = sanitizedDraftDedication): Promise<PaintingManifest> => {
+    if (
+      paintingManifest &&
+      sanitizeDedicationText(paintingManifest.dedicationText) === sanitizeDedicationText(dedicationText)
+    ) {
+      return paintingManifest;
+    }
+
     const result = await processIfNeeded();
     const manifest = buildPaintingManifest({
       order,
       result,
       origin: window.location.origin,
+      dedicationText,
     });
-    persistPaintingManifestLocally(manifest);
-    setPaintingManifest(manifest);
+    return persistManifest(manifest);
+  };
 
-    if (order.orderRef && order.instructionCode) {
-      supabase.functions.invoke("upsert-painting-manifest", {
-        body: {
-          orderRef: order.orderRef,
-          instructionCode: order.instructionCode,
-          manifest,
-        },
-      }).then(({ error: manifestError }) => {
-        if (manifestError) {
-          console.warn("Failed to persist painting manifest remotely", manifestError);
-        }
-      });
+  const commitDedication = async () => {
+    const nextDedication = sanitizedDraftDedication;
+
+    if (!dedicationDirty && paintingManifest) {
+      return paintingManifest;
     }
 
-    return manifest;
+    setSavingDedication(true);
+    setError(null);
+    setDedicationText(nextDedication);
+    setPdfBlob(null);
+    setProgress(0);
+
+    try {
+      return await ensureManifest(nextDedication);
+    } finally {
+      setSavingDedication(false);
+    }
   };
 
   const handleGenerate = async () => {
@@ -116,7 +182,7 @@ const Download = () => {
     try {
       setProgressLabel(dl.progressSteps[0]);
       setProgress(20);
-      const manifest = await ensureManifest();
+      const manifest = await commitDedication();
       setProgressLabel(dl.progressSteps[1]);
       setProgress(55);
       const blob = await generatePaintByNumbersPDF(manifest);
@@ -139,7 +205,7 @@ const Download = () => {
     try {
       setProgressLabel(dl.progressSteps[0]);
       setProgress(30);
-      await ensureManifest();
+      await commitDedication();
       setProgressLabel(dl.progressSteps[1]);
       setProgress(100);
     } catch (viewerError) {
@@ -161,7 +227,10 @@ const Download = () => {
   };
 
   const handleSharePreview = async () => {
-    const manifest = paintingManifest || (processingResult ? await ensureManifest() : null);
+    const manifest =
+      paintingManifest && !dedicationDirty
+        ? paintingManifest
+        : await ensureManifest(sanitizedDraftDedication);
     if (!manifest) return;
 
     try {
@@ -181,6 +250,7 @@ const Download = () => {
   };
 
   const activeManifest = paintingManifest;
+  const previewImageUrl = activeManifest?.referenceImageUrl || order.stylePreviewUrl || "";
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -200,9 +270,9 @@ const Download = () => {
               <CardContent className="p-0">
                 <div className="grid gap-0 lg:grid-cols-[320px_1fr]">
                   <div className="bg-primary/5 p-5">
-                    {order.stylePreviewUrl ? (
+                    {previewImageUrl ? (
                       <div className="overflow-hidden rounded-2xl border border-primary/10 bg-background">
-                        <img src={order.stylePreviewUrl} alt="Preview" className="w-full object-cover" />
+                        <img src={previewImageUrl} alt="Preview" className="w-full object-cover" />
                       </div>
                     ) : (
                       <div className="rounded-2xl border border-dashed border-primary/20 bg-background/70 h-full min-h-52 flex items-center justify-center text-sm text-muted-foreground">
@@ -216,20 +286,17 @@ const Download = () => {
                       <Badge variant="outline">{order.selectedStyle}</Badge>
                       {activeManifest && <Badge variant="outline">{activeManifest.stats.totalSections} sections</Badge>}
                       {activeManifest && <Badge variant="outline">{activeManifest.stats.colorCount} colors</Badge>}
+                      {hasDedication && (
+                        <Badge variant="outline" className="gap-1">
+                          <Heart className="h-3.5 w-3.5" />
+                          Personalized edition
+                        </Badge>
+                      )}
                     </div>
                     <h2 className="mt-4 text-2xl font-bold">Painting Guide v2</h2>
                     <p className="mt-2 text-sm text-muted-foreground max-w-2xl">
                       Your PDF and live viewer now follow the same painting manifest, so the sections, colors, and instruction code stay aligned across both formats.
                     </p>
-                    {order.dedicationText && (
-                      <div className="mt-4 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
-                        <div className="flex items-center gap-2 text-primary">
-                          <Heart className="h-4 w-4" />
-                          <span className="text-xs font-semibold uppercase tracking-[0.14em]">Dedication</span>
-                        </div>
-                        <p className="mt-2 text-sm font-medium">{order.dedicationText}</p>
-                      </div>
-                    )}
                     <div className="mt-5 grid gap-3 sm:grid-cols-3">
                       <div className="rounded-xl border p-3">
                         <div className="flex items-center gap-2 text-muted-foreground text-xs uppercase tracking-[0.12em]">
@@ -252,6 +319,97 @@ const Download = () => {
                     </div>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card className="mb-6 border-primary/10">
+              <CardContent className="p-5">
+                <Collapsible open={dedicationOpen} onOpenChange={setDedicationOpen}>
+                  <CollapsibleTrigger className="flex w-full items-center justify-between gap-4 text-left">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <PenLine className="h-4 w-4 text-primary" />
+                        <p className="text-sm font-semibold">Personalize artwork</p>
+                      </div>
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        {hasDedication
+                          ? "Your dedication is painted into the bottom-right corner of the artwork."
+                          : "Optionally add a short dedication that becomes part of the paintable design."}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={hasDedication ? "secondary" : "outline"}>
+                        {hasDedication ? "Dedication included" : "Optional"}
+                      </Badge>
+                      <ChevronDown
+                        className={`h-4 w-4 text-muted-foreground transition-transform ${
+                          dedicationOpen ? "rotate-180" : ""
+                        }`}
+                      />
+                    </div>
+                  </CollapsibleTrigger>
+
+                  <CollapsibleContent className="pt-4">
+                    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
+                      <div className="space-y-3">
+                        <div className="space-y-2">
+                          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                            Dedication
+                          </p>
+                          <Textarea
+                            value={dedicationDraft}
+                            onChange={(event) => setDedicationDraft(normalizeDedicationDraft(event.target.value))}
+                            placeholder="I love her • 14.02.2026"
+                            rows={3}
+                          />
+                          <div className="flex items-center justify-between text-xs text-muted-foreground">
+                            <span>Up to {DEDICATION_MAX_LENGTH} characters. Emojis are not supported.</span>
+                            <span>{dedicationDraft.length}/{DEDICATION_MAX_LENGTH}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap gap-3">
+                          <Button
+                            type="button"
+                            onClick={() => void commitDedication()}
+                            disabled={savingDedication || (!dedicationDirty && paintingManifest !== null)}
+                            className="gap-2 rounded-full"
+                          >
+                            {savingDedication ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                            {savingDedication ? "Saving..." : "Apply to preview"}
+                          </Button>
+                          {hasDedication && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => setDedicationDraft("")}
+                              disabled={savingDedication}
+                              className="rounded-full"
+                            >
+                              Clear dedication
+                            </Button>
+                          )}
+                        </div>
+
+                        {dedicationDirty && (
+                          <p className="text-xs text-muted-foreground">
+                            Unsaved changes will be applied automatically when you generate the PDF or prepare the viewer.
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="rounded-2xl border bg-primary/5 p-4">
+                        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                          Style
+                        </p>
+                        <p className="mt-2 text-sm font-medium">Signature plaque v1</p>
+                        <p className="mt-3 text-sm text-muted-foreground">
+                          The message sits inside the artwork in the bottom-right corner and becomes part of the paint-by-numbers canvas, PDF preview, and live viewer.
+                        </p>
+                      </div>
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
               </CardContent>
             </Card>
 
@@ -281,7 +439,7 @@ const Download = () => {
                         </div>
                         <h3 className="text-lg font-semibold">Manifest-based PDF ready</h3>
                         <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                          Generate the premium guide with dedication line, viewer QR, color legend, section pages, and the shared instruction code.
+                          Generate the premium guide with the embedded dedication plaque, viewer QR, color legend, section pages, and the shared instruction code.
                         </p>
                         <Button size="lg" onClick={handleGenerate} className="rounded-full px-8 shimmer-btn">
                           <FileText className="mr-2 h-5 w-5" />

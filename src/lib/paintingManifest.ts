@@ -1,14 +1,24 @@
 import { BRAND, STORAGE_KEYS, buildViewerUrl } from "@/lib/brand";
+import {
+  applyDedicationOverlay,
+  sanitizeDedicationText,
+  type PaintingDedication,
+} from "@/lib/dedicationOverlay";
 import { renderSmoothPreview, type ProcessingResult } from "@/lib/imageProcessing";
 import { COMPACT_PALETTES, PALETTES, type StylePalette } from "@/lib/palettes";
 import type { ArtStyle, KitSize, OrderState } from "@/lib/store";
 import { getPhoto } from "@/lib/store";
 import { getPaintingStats } from "@/lib/paintingLayout";
 
-const KIT_META: Record<KitSize, { label: string; estimatedHours: string; difficultyLabel: string; difficultyLevel: number }> = {
+const KIT_META: Record<
+  KitSize,
+  { label: string; estimatedHours: string; difficultyLabel: string; difficultyLevel: number }
+> = {
   stamp_kit_40x50: { label: "40 x 50 cm", estimatedHours: "15-30 h", difficultyLabel: "Avance", difficultyLevel: 3 },
   stamp_kit_30x40: { label: "30 x 40 cm", estimatedHours: "8-20 h", difficultyLabel: "Intermediaire", difficultyLevel: 2 },
   stamp_kit_A4: { label: "A4 (21 x 30 cm)", estimatedHours: "4-8 h", difficultyLabel: "Debutant", difficultyLevel: 1 },
+  stamp_kit_A3: { label: "A3 (29,7 x 42 cm)", estimatedHours: "8-20 h", difficultyLabel: "Intermediaire", difficultyLevel: 2 },
+  stamp_kit_A2: { label: "A2 (42 x 59,4 cm)", estimatedHours: "20-40 h", difficultyLabel: "Expert", difficultyLevel: 4 },
 };
 
 type LegacyViewerData = {
@@ -20,8 +30,15 @@ type LegacyViewerData = {
   createdAt?: string;
 };
 
+type RawManifest = Partial<PaintingManifest> & {
+  dedicationText?: string | null;
+  dedication?: PaintingDedication | null;
+};
+
+type ManifestBase = Omit<PaintingManifest, "version" | "dedication" | "referenceImageUrl" | "previewDataUrl">;
+
 export interface PaintingManifest {
-  version: 2;
+  version: 3;
   orderRef: string;
   instructionCode: string;
   category: string;
@@ -31,6 +48,7 @@ export interface PaintingManifest {
   paletteKey: string;
   createdAt: string;
   dedicationText: string | null;
+  dedication: PaintingDedication | null;
   sourceImageUrl: string | null;
   referenceImageUrl: string;
   previewDataUrl: string;
@@ -55,6 +73,8 @@ export interface PaintingManifest {
 function inferKitSize(gridCols: number, gridRows: number): KitSize {
   if (gridCols === 160 && gridRows === 200) return "stamp_kit_40x50";
   if (gridCols === 84 && gridRows === 119) return "stamp_kit_A4";
+  if (gridCols === 118 && gridRows === 168) return "stamp_kit_A3";
+  if (gridCols === 168 && gridRows === 237) return "stamp_kit_A2";
   return "stamp_kit_30x40";
 }
 
@@ -62,10 +82,87 @@ export function orderStyleToPaletteKey(style: ArtStyle | string) {
   return style === "pop_art" ? "popart" : style;
 }
 
-export function resolveManifestPalette(manifest: PaintingManifest): StylePalette {
+export function resolveManifestPalette(manifest: Pick<PaintingManifest, "kitSize" | "artStyle">): StylePalette {
   const paletteKey = orderStyleToPaletteKey(manifest.artStyle);
   const palettes = manifest.kitSize === "stamp_kit_A4" ? COMPACT_PALETTES : PALETTES;
   return palettes[paletteKey] || PALETTES.original;
+}
+
+function materializeManifest(base: ManifestBase): PaintingManifest {
+  const palette = resolveManifestPalette(base);
+  const applied = applyDedicationOverlay({
+    indices: Uint8Array.from(base.indices),
+    gridCols: base.gridCols,
+    gridRows: base.gridRows,
+    palette: palette.colors,
+    kitSize: base.kitSize,
+    dedicationText: base.dedicationText,
+  });
+  const referenceCanvas = renderSmoothPreview(
+    applied.indices,
+    palette.colors,
+    base.gridCols,
+    base.gridRows,
+    6,
+  );
+  const referenceImageUrl = referenceCanvas.toDataURL("image/jpeg", 0.9);
+
+  return {
+    ...base,
+    version: 3,
+    dedicationText: applied.dedication?.text || null,
+    dedication: applied.dedication,
+    referenceImageUrl,
+    previewDataUrl: referenceImageUrl,
+    indices: Array.from(applied.indices),
+  };
+}
+
+function buildBaseManifest(input: {
+  orderRef: string;
+  instructionCode: string;
+  category: string;
+  kitSize: KitSize;
+  artStyle: ArtStyle;
+  paletteKey: string;
+  createdAt: string;
+  dedicationText: string | null;
+  sourceImageUrl: string | null;
+  viewerUrl: string;
+  gridCols: number;
+  gridRows: number;
+  indices: number[];
+}) {
+  const kitMeta = KIT_META[input.kitSize];
+  const stats = getPaintingStats(input.gridCols, input.gridRows);
+  const palette = resolveManifestPalette({
+    kitSize: input.kitSize,
+    artStyle: input.artStyle,
+  });
+
+  return {
+    orderRef: input.orderRef,
+    instructionCode: input.instructionCode.toUpperCase(),
+    category: input.category,
+    kitSize: input.kitSize,
+    canvasLabel: kitMeta.label,
+    artStyle: input.artStyle,
+    paletteKey: input.paletteKey,
+    createdAt: input.createdAt,
+    dedicationText: sanitizeDedicationText(input.dedicationText) || null,
+    sourceImageUrl: input.sourceImageUrl,
+    viewerUrl: input.viewerUrl,
+    gridCols: input.gridCols,
+    gridRows: input.gridRows,
+    indices: input.indices,
+    stats: {
+      ...stats,
+      colorCount: palette.colors.length,
+      estimatedHours: kitMeta.estimatedHours,
+      difficultyLabel: kitMeta.difficultyLabel,
+      difficultyLevel: kitMeta.difficultyLevel,
+    },
+  } satisfies ManifestBase;
 }
 
 export function getPaintingManifestStorageKey(instructionCode: string) {
@@ -80,81 +177,82 @@ export function persistPaintingManifestLocally(manifest: PaintingManifest) {
   localStorage.setItem(getPaintingManifestStorageKey(manifest.instructionCode), JSON.stringify(manifest));
 }
 
-function normalizeManifest(raw: unknown, instructionCode: string): PaintingManifest | null {
+export function normalizePaintingManifest(raw: unknown, instructionCode: string) {
   if (!raw || typeof raw !== "object") return null;
-  const candidate = raw as Partial<PaintingManifest>;
 
-  if (candidate.version === 2 && Array.isArray(candidate.indices) && typeof candidate.referenceImageUrl === "string") {
-    return candidate as PaintingManifest;
-  }
+  const candidate = raw as RawManifest;
+  if (!Array.isArray(candidate.indices) || !candidate.gridCols || !candidate.gridRows) {
+    const legacy = raw as LegacyViewerData;
+    if (!Array.isArray(legacy.indices) || !legacy.gridCols || !legacy.gridRows || !legacy.paletteKey) {
+      return null;
+    }
 
-  const legacy = raw as LegacyViewerData;
-  if (!Array.isArray(legacy.indices) || !legacy.gridCols || !legacy.gridRows || !legacy.paletteKey) {
-    return null;
-  }
-
-  const inferredKitSize = inferKitSize(legacy.gridCols, legacy.gridRows);
-  const stats = getPaintingStats(legacy.gridCols, legacy.gridRows);
-  const kitMeta = KIT_META[inferredKitSize];
-
-  return {
-    version: 2,
-    orderRef: "",
-    instructionCode: instructionCode.toUpperCase(),
-    category: "classic",
-    kitSize: inferredKitSize,
-    canvasLabel: kitMeta.label,
-    artStyle: legacy.paletteKey === "popart" ? "pop_art" : (legacy.paletteKey as ArtStyle),
-    paletteKey: legacy.paletteKey,
-    createdAt: legacy.createdAt || new Date().toISOString(),
-    dedicationText: null,
-    sourceImageUrl: null,
-    referenceImageUrl: legacy.previewDataUrl,
-    previewDataUrl: legacy.previewDataUrl,
-    viewerUrl: buildViewerUrl(instructionCode),
-    gridCols: legacy.gridCols,
-    gridRows: legacy.gridRows,
-    indices: legacy.indices,
-    stats: {
-      ...stats,
-      colorCount: resolveManifestPalette({
-        version: 2,
+    const inferredKitSize = inferKitSize(legacy.gridCols, legacy.gridRows);
+    return materializeManifest(
+      buildBaseManifest({
         orderRef: "",
         instructionCode,
         category: "classic",
         kitSize: inferredKitSize,
-        canvasLabel: kitMeta.label,
         artStyle: legacy.paletteKey === "popart" ? "pop_art" : (legacy.paletteKey as ArtStyle),
         paletteKey: legacy.paletteKey,
         createdAt: legacy.createdAt || new Date().toISOString(),
         dedicationText: null,
         sourceImageUrl: null,
-        referenceImageUrl: legacy.previewDataUrl,
-        previewDataUrl: legacy.previewDataUrl,
         viewerUrl: buildViewerUrl(instructionCode),
         gridCols: legacy.gridCols,
         gridRows: legacy.gridRows,
         indices: legacy.indices,
-        stats: {
-          ...stats,
-          colorCount: 0,
-          estimatedHours: kitMeta.estimatedHours,
-          difficultyLabel: kitMeta.difficultyLabel,
-          difficultyLevel: kitMeta.difficultyLevel,
-        },
-      }).colors.length,
-      estimatedHours: kitMeta.estimatedHours,
-      difficultyLabel: kitMeta.difficultyLabel,
-      difficultyLevel: kitMeta.difficultyLevel,
-    },
-  };
+      }),
+    );
+  }
+
+  const inferredKitSize = candidate.kitSize || inferKitSize(candidate.gridCols, candidate.gridRows);
+  const artStyle = candidate.artStyle || (candidate.paletteKey === "popart" ? "pop_art" : "original");
+  const base = buildBaseManifest({
+    orderRef: candidate.orderRef || "",
+    instructionCode: candidate.instructionCode || instructionCode,
+    category: candidate.category || "classic",
+    kitSize: inferredKitSize,
+    artStyle,
+    paletteKey: candidate.paletteKey || orderStyleToPaletteKey(artStyle),
+    createdAt: candidate.createdAt || new Date().toISOString(),
+    dedicationText: candidate.dedication?.text || candidate.dedicationText || null,
+    sourceImageUrl:
+      typeof candidate.sourceImageUrl === "string" && candidate.sourceImageUrl.length > 0
+        ? candidate.sourceImageUrl
+        : null,
+    viewerUrl:
+      typeof candidate.viewerUrl === "string" && candidate.viewerUrl.length > 0
+        ? candidate.viewerUrl
+        : buildViewerUrl(candidate.instructionCode || instructionCode),
+    gridCols: candidate.gridCols,
+    gridRows: candidate.gridRows,
+    indices: candidate.indices,
+  });
+
+  if (candidate.version === 3 && typeof candidate.referenceImageUrl === "string") {
+    return {
+      ...base,
+      version: 3,
+      dedication: candidate.dedication || null,
+      referenceImageUrl: candidate.referenceImageUrl,
+      previewDataUrl:
+        typeof candidate.previewDataUrl === "string" && candidate.previewDataUrl.length > 0
+          ? candidate.previewDataUrl
+          : candidate.referenceImageUrl,
+      indices: candidate.indices,
+    } satisfies PaintingManifest;
+  }
+
+  return materializeManifest(base);
 }
 
 export function loadPaintingManifestLocally(instructionCode: string) {
   try {
     const stored = localStorage.getItem(getPaintingManifestStorageKey(instructionCode));
     if (!stored) return null;
-    return normalizeManifest(JSON.parse(stored), instructionCode);
+    return normalizePaintingManifest(JSON.parse(stored), instructionCode);
   } catch {
     return null;
   }
@@ -164,6 +262,7 @@ export function buildPaintingManifest(input: {
   order: OrderState;
   result: ProcessingResult;
   origin?: string;
+  dedicationText?: string | null;
 }) {
   const { order, result, origin } = input;
   if (!order.instructionCode) {
@@ -175,36 +274,21 @@ export function buildPaintingManifest(input: {
     throw new Error("Kit size is required to build the painting manifest");
   }
 
-  const kitMeta = KIT_META[kitSize];
-  const stats = getPaintingStats(result.gridCols, result.gridRows);
-  const referenceCanvas = renderSmoothPreview(result.indices, result.palette.colors, result.gridCols, result.gridRows, 6);
-  const referenceImageUrl = referenceCanvas.toDataURL("image/jpeg", 0.9);
-  const sourceImageUrl = order.aiGeneratedUrl || getPhoto(order) || null;
-
-  return {
-    version: 2 as const,
-    orderRef: order.orderRef,
-    instructionCode: order.instructionCode.toUpperCase(),
-    category: order.category,
-    kitSize,
-    canvasLabel: kitMeta.label,
-    artStyle: order.selectedStyle || "original",
-    paletteKey: result.styleKey,
-    createdAt: new Date().toISOString(),
-    dedicationText: order.dedicationText?.trim() || null,
-    sourceImageUrl,
-    referenceImageUrl,
-    previewDataUrl: referenceImageUrl,
-    viewerUrl: buildViewerUrl(order.instructionCode, origin || BRAND.siteUrl),
-    gridCols: result.gridCols,
-    gridRows: result.gridRows,
-    indices: Array.from(result.indices),
-    stats: {
-      ...stats,
-      colorCount: result.palette.colors.length,
-      estimatedHours: kitMeta.estimatedHours,
-      difficultyLabel: kitMeta.difficultyLabel,
-      difficultyLevel: kitMeta.difficultyLevel,
-    },
-  };
+  return materializeManifest(
+    buildBaseManifest({
+      orderRef: order.orderRef,
+      instructionCode: order.instructionCode,
+      category: order.category,
+      kitSize,
+      artStyle: order.selectedStyle || "original",
+      paletteKey: result.styleKey,
+      createdAt: new Date().toISOString(),
+      dedicationText: input.dedicationText ?? order.dedicationText ?? null,
+      sourceImageUrl: order.aiGeneratedUrl || getPhoto(order) || null,
+      viewerUrl: buildViewerUrl(order.instructionCode, origin || BRAND.siteUrl),
+      gridCols: result.gridCols,
+      gridRows: result.gridRows,
+      indices: Array.from(result.indices),
+    }),
+  );
 }

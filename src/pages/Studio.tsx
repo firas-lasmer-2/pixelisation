@@ -25,10 +25,11 @@ import {
   ArrowLeft, ArrowRight, Check, Truck, CreditCard, Package,
   Camera, Palette, User, MapPin, ShieldCheck, Sparkles, CheckCircle,
   Clock, Layers, Star, Gift, Edit3,
-  Paintbrush, BookOpen, Grid3X3, Crown, Leaf, Award, Upload, Tag, X, Wand2, Loader2,
+  Paintbrush, BookOpen, Crown, Leaf, Award, Upload, Tag, X, Wand2, Loader2,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { STORAGE_KEYS } from "@/lib/brand";
+import { DEDICATION_MAX_LENGTH, normalizeDedicationDraft } from "@/lib/dedicationOverlay";
 import { trackFunnelEvent } from "@/lib/funnel";
 
 /* ─── Kit size → image processing key mapping ─── */
@@ -36,6 +37,8 @@ const STORE_TO_IMG: Record<KitSize, ImgKitSize> = {
   stamp_kit_40x50: "40x50",
   stamp_kit_30x40: "30x40",
   stamp_kit_A4: "A4",
+  stamp_kit_A3: "A3",
+  stamp_kit_A2: "A2",
 };
 
 /* ─── 6 Steps (added Category as step 0) ─── */
@@ -123,6 +126,13 @@ const SIZE_CARDS: {
     savings: Math.round((1 - PRICING.stamp_kit_A4 / ORIGINAL_PRICING.stamp_kit_A4) * 100),
   },
   {
+    key: "stamp_kit_A3",
+    accent: "card-accent-gold",
+    accentClass: "text-primary",
+    icon: Award,
+    savings: Math.round((1 - PRICING.stamp_kit_A3 / ORIGINAL_PRICING.stamp_kit_A3) * 100),
+  },
+  {
     key: "stamp_kit_30x40",
     accent: "card-accent-gold",
     accentClass: "text-primary",
@@ -137,12 +147,111 @@ const SIZE_CARDS: {
     badge: { label: "Populaire", icon: Star, className: "bg-accent/10 text-accent border-accent/20" },
     savings: Math.round((1 - PRICING.stamp_kit_40x50 / ORIGINAL_PRICING.stamp_kit_40x50) * 100),
   },
+  {
+    key: "stamp_kit_A2",
+    accent: "card-accent-burgundy",
+    accentClass: "text-accent",
+    icon: Crown,
+    badge: { label: "Expert", icon: Star, className: "bg-purple-50 text-purple-700 border-purple-200" },
+    savings: Math.round((1 - PRICING.stamp_kit_A2 / ORIGINAL_PRICING.stamp_kit_A2) * 100),
+  },
 ];
 
-const SIZE_DETAILS: Record<KitSize, { colors: string; hours: string; cells: string; difficulty: number; diffLabel: string }> = {
-  stamp_kit_A4: { colors: "8", hours: "4-8", cells: "~10 000", difficulty: 1, diffLabel: "Débutant" },
-  stamp_kit_30x40: { colors: "12-15", hours: "8-20", cells: "19 200", difficulty: 2, diffLabel: "Intermédiaire" },
-  stamp_kit_40x50: { colors: "12-15", hours: "15-30", cells: "32 000", difficulty: 3, diffLabel: "Avancé" },
+const SIZE_DETAILS: Record<
+  KitSize,
+  {
+    colors: string;
+    hours: string;
+    cells: string;
+    difficulty: number;
+    diffLabel: string;
+    dimensions: string;
+    headline: string;
+    summary: string;
+    idealFor: string;
+    featureBullets: string[];
+  }
+> = {
+  stamp_kit_A4: {
+    colors: "10-12",
+    hours: "4-8",
+    cells: "~10 000",
+    difficulty: 1,
+    diffLabel: "Débutant",
+    dimensions: "21 x 29,7 cm",
+    headline: "Rapide, doux, accessible",
+    summary: "Le format le plus simple à terminer. Parfait pour une première expérience ou un petit cadeau plein d'attention.",
+    idealFor: "un premier essai, une chambre ou un cadeau discret",
+    featureBullets: [
+      "Se termine en quelques sessions sans fatigue visuelle.",
+      "Facile à encadrer et à offrir.",
+      "Excellent choix pour tester Helma en douceur.",
+    ],
+  },
+  stamp_kit_A3: {
+    colors: "12-15",
+    hours: "8-20",
+    cells: "~20 000",
+    difficulty: 2,
+    diffLabel: "Intermédiaire",
+    dimensions: "29,7 x 42 cm",
+    headline: "Le grand format papier",
+    summary: "Le format A3 offre une résolution comparable au 30×40 cm dans les proportions standard de la papeterie. Idéal pour un rendu net et facile à encadrer.",
+    idealFor: "portraits, cadeaux et décoration murale",
+    featureBullets: [
+      "Proportions standard A3 — facile à trouver un cadre.",
+      "Niveau de détail équivalent au 30×40 cm.",
+      "Bon choix pour un projet plus grand sans passer au format toile.",
+    ],
+  },
+  stamp_kit_30x40: {
+    colors: "12-15",
+    hours: "8-20",
+    cells: "19 200",
+    difficulty: 2,
+    diffLabel: "Intermédiaire",
+    dimensions: "30 x 40 cm",
+    headline: "Notre meilleur équilibre",
+    summary: "Le format Helma le plus polyvalent. Il donne plus de détail qu'un A4 sans devenir trop long ou trop exigeant.",
+    idealFor: "la plupart des portraits, couples et cadeaux",
+    featureBullets: [
+      "Bon niveau de détail sans rallonger inutilement le temps de peinture.",
+      "Le format le plus serein pour un premier vrai projet.",
+      "Très bon rendu final sur un mur ou posé sur un chevalet.",
+    ],
+  },
+  stamp_kit_40x50: {
+    colors: "12-15",
+    hours: "15-30",
+    cells: "32 000",
+    difficulty: 3,
+    diffLabel: "Avancé",
+    dimensions: "40 x 50 cm",
+    headline: "Pièce maîtresse",
+    summary: "Le grand format pour un rendu plus immersif, plus détaillé et vraiment marquant une fois terminé et encadré.",
+    idealFor: "un souvenir fort, un salon ou un cadeau signature",
+    featureBullets: [
+      "Plus d'espace pour les détails et les transitions.",
+      "Impact visuel supérieur une fois accroché.",
+      "Le meilleur choix si vous cherchez un effet waouh.",
+    ],
+  },
+  stamp_kit_A2: {
+    colors: "12-15",
+    hours: "20-40",
+    cells: "~40 000",
+    difficulty: 4,
+    diffLabel: "Expert",
+    dimensions: "42 x 59,4 cm",
+    headline: "Format monumental",
+    summary: "Le plus grand format disponible, pour une pièce murale qui impressionne. Chaque détail est amplifié à l'échelle d'une véritable œuvre d'art.",
+    idealFor: "une pièce de salon, un cadeau exceptionnel ou un projet ambitieux",
+    featureBullets: [
+      "Niveau de détail maximal — comparable au 40×50 cm en proportions A.",
+      "Effet visuel monumental une fois terminé.",
+      "Pour les peintres expérimentés qui cherchent un défi.",
+    ],
+  },
 };
 
 const KIT_INCLUDES = [
@@ -152,16 +261,57 @@ const KIT_INCLUDES = [
   { icon: BookOpen, label: "Guide numérique PDF" },
 ];
 
-const DIFFICULTY_COLORS = ["bg-green-500", "bg-amber-500", "bg-red-500"];
+const DIFFICULTY_COLORS = ["bg-green-500", "bg-amber-500", "bg-red-500", "bg-purple-600"];
 
 /* ─── Canvas scale illustration ─── */
-function CanvasScale({ size }: { size: KitSize }) {
-  const scales: Record<KitSize, { w: number; h: number }> = {
-    stamp_kit_A4: { w: 32, h: 44 },
-    stamp_kit_30x40: { w: 42, h: 56 },
-    stamp_kit_40x50: { w: 52, h: 64 },
+function CanvasScale({ size, variant = "compact" }: { size: KitSize; variant?: "compact" | "hero" }) {
+  const scales: Record<"compact" | "hero", Record<KitSize, { w: number; h: number }>> = {
+    compact: {
+      stamp_kit_A4: { w: 32, h: 44 },
+      stamp_kit_A3: { w: 38, h: 54 },
+      stamp_kit_30x40: { w: 42, h: 56 },
+      stamp_kit_40x50: { w: 52, h: 64 },
+      stamp_kit_A2: { w: 58, h: 82 },
+    },
+    hero: {
+      stamp_kit_A4: { w: 108, h: 152 },
+      stamp_kit_A3: { w: 128, h: 180 },
+      stamp_kit_30x40: { w: 142, h: 188 },
+      stamp_kit_40x50: { w: 170, h: 212 },
+      stamp_kit_A2: { w: 180, h: 254 },
+    },
   };
-  const s = scales[size];
+  const s = scales[variant][size];
+
+  if (variant === "hero") {
+    return (
+      <div className="flex items-center justify-center rounded-[28px] border border-border/70 bg-card/80 p-6 shadow-inner">
+        <div className="flex items-end gap-4">
+          <div
+            className="relative overflow-hidden rounded-[22px] border border-foreground/10 bg-[linear-gradient(135deg,hsl(var(--primary)/0.14),transparent_60%)] shadow-[0_24px_60px_-36px_rgba(0,0,0,0.45)]"
+            style={{ width: s.w, height: s.h }}
+          >
+            <div
+              className="absolute inset-0 opacity-60"
+              style={{
+                backgroundImage:
+                  "linear-gradient(to right, hsl(var(--foreground) / 0.05) 1px, transparent 1px), linear-gradient(to bottom, hsl(var(--foreground) / 0.05) 1px, transparent 1px)",
+                backgroundSize: "14px 14px",
+              }}
+            />
+            <div className="absolute inset-[10px] rounded-[16px] border border-white/70 bg-white/35" />
+            <div className="absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-foreground/12 to-transparent" />
+          </div>
+
+          <div className="flex flex-col gap-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+            <span>Format</span>
+            <span className="text-foreground font-semibold normal-case tracking-normal text-sm">{SIZE_LABELS[size]}</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex items-end justify-center h-16 mb-2">
       <div
@@ -302,7 +452,7 @@ const Studio = () => {
         setCategory(nextCategory as OrderCategory);
       }
 
-      if (cart.selectedSize && ["stamp_kit_40x50", "stamp_kit_30x40", "stamp_kit_A4"].includes(cart.selectedSize)) {
+      if (cart.selectedSize && ["stamp_kit_40x50", "stamp_kit_30x40", "stamp_kit_A4", "stamp_kit_A3", "stamp_kit_A2"].includes(cart.selectedSize)) {
         setSize(cart.selectedSize as KitSize);
       }
 
@@ -318,7 +468,7 @@ const Studio = () => {
       };
       setContact(recoveredContact);
       setContactForm(recoveredContact);
-      setDedicationText(cart.dedicationText || "");
+      setDedicationText(normalizeDedicationDraft(cart.dedicationText || ""));
 
       const shouldRestartFromUpload = Boolean(cart.photoUploaded) || Number(cart.stepReached || 0) >= 3;
       const restoredStep = shouldRestartFromUpload
@@ -760,108 +910,150 @@ const Studio = () => {
                 <div>
                   <SectionHeading
                     title="Choisissez votre kit"
-                    subtitle="Sélectionnez la taille de votre toile pour commencer."
+                    subtitle="Choisissez le format qui correspond au niveau de détail, au temps de peinture et à l'effet final que vous recherchez."
                   />
 
-                  <div className="grid gap-4 sm:gap-5 sm:grid-cols-3 mb-8">
-                    {SIZE_CARDS.map((card, idx) => {
+                  <div className="grid gap-5 sm:grid-cols-3 mb-8">
+                    {SIZE_CARDS.map((card) => {
                       const isSelected = order.selectedSize === card.key;
                       const details = SIZE_DETAILS[card.key];
                       const CardIcon = card.icon;
 
                       return (
-                        <div
+                        <button
                           key={card.key}
-                          className={`relative rounded-xl border bg-card overflow-hidden cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:shadow-xl ${card.accent} ${
-                            isSelected ? "gold-glow scale-[1.02]" : "hover:shadow-lg"
-                          }`}
+                          type="button"
                           onClick={() => setSize(card.key)}
-                          style={{ animationDelay: `${idx * 80}ms` }}
+                          className={`group relative flex flex-col rounded-[28px] border p-6 text-left transition-all duration-300 hover:-translate-y-1 hover:shadow-xl ${
+                            isSelected
+                              ? "border-primary/50 bg-primary/[0.04] shadow-lg gold-glow"
+                              : card.key === "stamp_kit_30x40"
+                              ? "border-primary/20 bg-[linear-gradient(145deg,hsl(var(--card)),hsl(var(--primary)/0.04))]"
+                              : "border-border/80 bg-card hover:border-primary/25"
+                          }`}
                         >
                           {card.badge && (
-                            <div className="absolute top-3 right-3 z-10">
-                              <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2.5 py-1 rounded-full border ${card.badge.className}`}>
-                                <card.badge.icon className="h-3 w-3" />
-                                {card.badge.label}
-                              </span>
-                            </div>
+                            <span className={`absolute -top-3 left-1/2 -translate-x-1/2 inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[11px] font-semibold shadow-sm bg-background ${card.badge.className}`}>
+                              <card.badge.icon className="h-3 w-3" />
+                              {card.badge.label}
+                            </span>
                           )}
 
-                          {isSelected && (
-                            <div className="absolute top-3 left-3 z-10 w-6 h-6 rounded-full bg-primary flex items-center justify-center animate-scale-in">
-                              <Check className="h-3.5 w-3.5 text-primary-foreground" />
+                          <div className="flex justify-center mb-5 mt-2">
+                            <CanvasScale size={card.key} variant="compact" />
+                          </div>
+
+                          <div className={`mb-3 flex h-10 w-10 items-center justify-center rounded-2xl border bg-background/80 ${card.accentClass}`}>
+                            <CardIcon className="h-5 w-5" />
+                          </div>
+
+                          <p className="text-xl font-bold text-foreground">{SIZE_LABELS[card.key]}</p>
+                          <p className="mt-0.5 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">{details.dimensions}</p>
+                          <p className="mt-3 text-sm font-semibold text-foreground/90">{details.headline}</p>
+                          <p className="mt-1 text-xs leading-5 text-muted-foreground line-clamp-3">{details.summary}</p>
+
+                          <div className="mt-4 grid grid-cols-3 gap-2">
+                            <div className="rounded-xl bg-secondary/60 p-2 text-center">
+                              <p className="text-[10px] text-muted-foreground">Temps</p>
+                              <p className="text-xs font-bold text-foreground">{details.hours}h</p>
                             </div>
-                          )}
-
-                          <div className="p-5 pt-6">
-                            <CanvasScale size={card.key} />
-
-                            <div className="flex items-center gap-2 mb-1">
-                              <CardIcon className={`h-4 w-4 ${card.accentClass}`} />
-                              <p className="text-lg font-bold" style={{ fontFamily: "'Playfair Display', serif" }}>
-                                {SIZE_LABELS[card.key]}
-                              </p>
+                            <div className="rounded-xl bg-secondary/60 p-2 text-center">
+                              <p className="text-[10px] text-muted-foreground">Couleurs</p>
+                              <p className="text-xs font-bold text-foreground">{details.colors}</p>
                             </div>
+                            <div className="rounded-xl bg-secondary/60 p-2 text-center">
+                              <p className="text-[10px] text-muted-foreground">Niveau</p>
+                              <p className="text-xs font-bold text-foreground">{details.diffLabel}</p>
+                            </div>
+                          </div>
 
-                            <div className="flex items-baseline gap-2 mt-2">
-                              <span className="text-2xl font-bold text-foreground">{PRICING[card.key]}</span>
-                              <span className="text-sm text-muted-foreground">DT</span>
-                              <span className="text-xs text-muted-foreground line-through ml-1">{ORIGINAL_PRICING[card.key]} DT</span>
+                          <div className="mt-3 flex gap-1">
+                            {[0, 1, 2].map((level) => (
+                              <div
+                                key={level}
+                                className={`h-1.5 flex-1 rounded-full ${
+                                  level < details.difficulty ? DIFFICULTY_COLORS[details.difficulty - 1] : "bg-muted"
+                                }`}
+                              />
+                            ))}
+                          </div>
+
+                          <div className="mt-auto pt-5">
+                            <div className="flex items-end justify-between">
+                              <div>
+                                <span className="text-2xl font-bold text-foreground">{PRICING[card.key]}</span>
+                                <span className="ml-1 text-xs text-muted-foreground">DT</span>
+                                <p className="text-xs text-muted-foreground line-through">{ORIGINAL_PRICING[card.key]} DT</p>
+                              </div>
                               {card.savings > 0 && (
-                                <span className="savings-badge text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-auto">
+                                <span className="rounded-xl bg-primary/10 px-2.5 py-1 text-xs font-bold text-primary">
                                   -{card.savings}%
                                 </span>
                               )}
                             </div>
-
-                            <div className="mt-4 space-y-2">
-                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                <Grid3X3 className="h-3.5 w-3.5 shrink-0" />
-                                <span>{details.cells} cellules</span>
-                              </div>
-                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                <Palette className="h-3.5 w-3.5 shrink-0" />
-                                <span>{details.colors} couleurs</span>
-                              </div>
-                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                <Clock className="h-3.5 w-3.5 shrink-0" />
-                                <span>{details.hours}h de peinture</span>
-                              </div>
-                            </div>
-
-                            <div className="mt-3 flex items-center gap-2">
-                              <div className="flex gap-0.5">
-                                {[0, 1, 2].map((d) => (
-                                  <div
-                                    key={d}
-                                    className={`h-1.5 w-5 rounded-full transition-colors ${
-                                      d < details.difficulty ? DIFFICULTY_COLORS[details.difficulty - 1] : "bg-muted"
-                                    }`}
-                                  />
-                                ))}
-                              </div>
-                              <span className="text-[10px] font-medium text-muted-foreground">{details.diffLabel}</span>
+                            <div className={`mt-4 flex h-10 w-full items-center justify-center rounded-2xl text-sm font-semibold transition-colors ${
+                              isSelected
+                                ? "bg-primary text-primary-foreground"
+                                : "border border-border bg-background/80 text-foreground group-hover:border-primary/30 group-hover:text-primary"
+                            }`}>
+                              {isSelected ? (
+                                <><Check className="mr-2 h-4 w-4" /> Sélectionné</>
+                              ) : (
+                                "Choisir ce format"
+                              )}
                             </div>
                           </div>
-                        </div>
+                        </button>
                       );
                     })}
                   </div>
 
-                  {/* Kit includes */}
-                  <div className="rounded-xl border-l-4 border-l-primary bg-primary/[0.03] border border-border p-5 mb-8">
-                    <p className="text-xs font-bold uppercase tracking-[0.15em] text-primary mb-4">
-                      Chaque kit contient
-                    </p>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                      {KIT_INCLUDES.map((item, i) => (
-                        <div key={i} className="flex items-center gap-3">
-                          <div className="h-9 w-9 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
-                            <item.icon className="h-4 w-4 text-primary" />
-                          </div>
-                          <span className="text-xs font-medium text-foreground leading-tight">{item.label}</span>
+                  <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px] mb-8">
+                    <div className="rounded-[28px] border border-border bg-card/90 p-6">
+                      <div className="flex items-center justify-between gap-4">
+                        <div>
+                          <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">
+                            Dans chaque kit
+                          </p>
+                          <h3 className="mt-2 text-2xl font-bold text-foreground">Tout est prêt pour commencer</h3>
                         </div>
-                      ))}
+                        <ShieldCheck className="h-6 w-6 text-primary" />
+                      </div>
+
+                      <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                        {KIT_INCLUDES.map((item, i) => (
+                          <div key={i} className="rounded-2xl border border-border/70 bg-background/75 p-4">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                              <item.icon className="h-4 w-4" />
+                            </div>
+                            <p className="mt-3 text-sm font-medium leading-6 text-foreground">{item.label}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="rounded-[28px] border border-border bg-[linear-gradient(150deg,hsl(var(--card)),hsl(var(--primary)/0.05))] p-6">
+                      <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">
+                        Comment choisir
+                      </p>
+                      <h3 className="mt-2 text-2xl font-bold text-foreground">Ce qui change vraiment</h3>
+
+                      <div className="mt-6 space-y-4">
+                        <div className="rounded-2xl border border-border/70 bg-background/75 p-4">
+                          <p className="text-sm font-semibold text-foreground">A4</p>
+                          <p className="mt-1 text-sm text-muted-foreground">Le plus rapide à finir. Idéal si vous voulez une expérience légère et satisfaisante.</p>
+                        </div>
+
+                        <div className="rounded-2xl border border-primary/20 bg-primary/[0.04] p-4">
+                          <p className="text-sm font-semibold text-foreground">30x40</p>
+                          <p className="mt-1 text-sm text-muted-foreground">Le format le plus équilibré entre présence au mur, niveau de détail et temps de peinture.</p>
+                        </div>
+
+                        <div className="rounded-2xl border border-border/70 bg-background/75 p-4">
+                          <p className="text-sm font-semibold text-foreground">40x50</p>
+                          <p className="mt-1 text-sm text-muted-foreground">Plus immersif, plus spectaculaire, plus long. À choisir si vous voulez un vrai résultat signature.</p>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
@@ -1253,12 +1445,12 @@ const Studio = () => {
                           <Label className="text-xs font-semibold">Short line for the guide or viewer (optional)</Label>
                           <Textarea
                             value={order.dedicationText}
-                            onChange={(e) => setDedicationText(e.target.value.slice(0, 36))}
+                            onChange={(e) => setDedicationText(normalizeDedicationDraft(e.target.value))}
                             placeholder="I love you • 14.02.2026"
                             rows={2}
                           />
                           <p className="text-xs text-muted-foreground">
-                            {order.dedicationText.length}/36 characters. Best for names, dates, or a short message.
+                            {order.dedicationText.length}/{DEDICATION_MAX_LENGTH} characters. Best for names, dates, or a short message.
                           </p>
                         </div>
                       </div>

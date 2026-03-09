@@ -4,7 +4,7 @@ import React from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 export type OrderCategory = "classic" | "family" | "kids_dream" | "pet";
-export type KitSize = "stamp_kit_40x50" | "stamp_kit_30x40" | "stamp_kit_A4";
+export type KitSize = "stamp_kit_40x50" | "stamp_kit_30x40" | "stamp_kit_A4" | "stamp_kit_A3" | "stamp_kit_A2";
 export type ArtStyle = "original" | "vintage" | "pop_art";
 
 export interface ContactInfo {
@@ -228,12 +228,16 @@ export const PRICING: Record<KitSize, number> = {
   stamp_kit_40x50: 449,
   stamp_kit_30x40: 349,
   stamp_kit_A4: 249,
+  stamp_kit_A3: 299,
+  stamp_kit_A2: 399,
 };
 
 export const ORIGINAL_PRICING: Record<KitSize, number> = {
   stamp_kit_40x50: 549,
   stamp_kit_30x40: 429,
   stamp_kit_A4: 329,
+  stamp_kit_A3: 389,
+  stamp_kit_A2: 499,
 };
 
 export const BUNDLE_PRICE = 749;
@@ -243,6 +247,8 @@ export const SIZE_LABELS: Record<KitSize, string> = {
   stamp_kit_40x50: "40 × 50 cm",
   stamp_kit_30x40: "30 × 40 cm",
   stamp_kit_A4: "A4 (21 × 30 cm)",
+  stamp_kit_A3: "A3 (29,7 × 42 cm)",
+  stamp_kit_A2: "A2 (42 × 59,4 cm)",
 };
 
 export const CATEGORY_META: Record<OrderCategory, { label: string; description: string; photosNeeded: number; icon: string }> = {

@@ -29,6 +29,7 @@ interface PdfOptions {
   orderRef?: string;
   instructionCode?: string;
   dedicationText?: string | null;
+  dedication?: PaintingManifest["dedication"];
   referenceImageUrl?: string | null;
   sourceImageUrl?: string | null;
   viewerUrl?: string | null;
@@ -183,6 +184,7 @@ function renderCoverPage(doc: jsPDF, options: PdfOptions, colorCounts: number[],
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
   const { palette, canvasSize, brandName = BRAND_CONFIG.pdfName } = options;
+  const hasDedication = Boolean(options.dedication?.text || options.dedicationText);
 
   doc.setFillColor(...BRAND.cream);
   doc.rect(0, 0, pageW, pageH, "F");
@@ -258,7 +260,16 @@ function renderCoverPage(doc: jsPDF, options: PdfOptions, colorCounts: number[],
   });
 
   // Compact palette strip
-  const paletteY = badgeY + 15;
+  let paletteY = badgeY + 15;
+  if (hasDedication) {
+    doc.setFillColor(...BRAND.burgundy);
+    doc.roundedRect(pageW / 2 - 24, badgeY + 11, 48, 7, 3, 3, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7);
+    doc.setTextColor(255, 255, 255);
+    doc.text("PERSONALIZED EDITION", pageW / 2, badgeY + 15.6, { align: "center" });
+    paletteY += 10;
+  }
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
   doc.setTextColor(...BRAND.charcoal);
@@ -280,21 +291,6 @@ function renderCoverPage(doc: jsPDF, options: PdfOptions, colorCounts: number[],
     doc.text(COLOR_LETTERS[i], cx, stripY + 5.5, { align: "center" });
   });
 
-  if (options.dedicationText) {
-    const dedicationY = stripY + 12;
-    doc.setFillColor(...BRAND.goldPale);
-    doc.setDrawColor(...BRAND.goldLight);
-    doc.roundedRect(22, dedicationY - 4, pageW - 44, 14, 3, 3, "FD");
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(7);
-    doc.setTextColor(...BRAND.warmGray);
-    doc.text("DEDICATION", pageW / 2, dedicationY, { align: "center" });
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(11);
-    doc.setTextColor(...BRAND.charcoal);
-    doc.text(options.dedicationText, pageW / 2, dedicationY + 5, { align: "center" });
-  }
-
   if (options.viewerUrl && options.instructionCode) {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7);
@@ -315,6 +311,7 @@ async function renderStudioPage(doc: jsPDF, options: PdfOptions, totalPages: num
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
   const { brandName = BRAND_CONFIG.pdfName } = options;
+  const hasDedication = Boolean(options.dedication?.text || options.dedicationText);
 
   doc.addPage();
   doc.setFillColor(...BRAND.cream);
@@ -330,6 +327,15 @@ async function renderStudioPage(doc: jsPDF, options: PdfOptions, totalPages: num
   doc.setFontSize(8.5);
   doc.setTextColor(...BRAND.warmGray);
   doc.text("The PDF, viewer, and section checklist all follow this same layout.", 14, 30);
+
+  if (hasDedication) {
+    doc.setFillColor(...BRAND.burgundy);
+    doc.roundedRect(pageW - 56, 18, 42, 8, 3, 3, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7);
+    doc.setTextColor(255, 255, 255);
+    doc.text("Personalized edition", pageW - 35, 23.2, { align: "center" });
+  }
 
   const cardY = 38;
   const cardH = 62;
@@ -900,6 +906,7 @@ export async function generatePaintByNumbersPDF(manifest: PaintingManifest): Pro
     orderRef: manifest.orderRef,
     instructionCode: manifest.instructionCode,
     dedicationText: manifest.dedicationText,
+    dedication: manifest.dedication,
     referenceImageUrl: manifest.referenceImageUrl,
     sourceImageUrl: manifest.sourceImageUrl,
     viewerUrl: manifest.viewerUrl,

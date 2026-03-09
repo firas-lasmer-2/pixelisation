@@ -1,12 +1,14 @@
 import { PaletteColor, StylePalette, PALETTES, COMPACT_PALETTES, STYLE_KEYS } from "./palettes";
 
 // ─── Fixed DMC-style grid dimensions (2.5mm cells) ─────────────────────
-export type KitSize = "40x50" | "30x40" | "A4";
+export type KitSize = "40x50" | "30x40" | "A4" | "A3" | "A2";
 
 export const GRID_CONFIG: Record<KitSize, { cols: number; rows: number }> = {
   "30x40": { cols: 120, rows: 160 },  // 19,200 cells, 2.5mm each
   "40x50": { cols: 160, rows: 200 },  // 32,000 cells, 2.5mm each
   "A4":    { cols: 84,  rows: 119 },  // 9,996 cells, 2.5mm each
+  "A3":    { cols: 118, rows: 168 },  // 19,824 cells, 2.5mm each
+  "A2":    { cols: 168, rows: 237 },  // 39,816 cells, 2.5mm each
 };
 
 // ─── CIELAB Delta-E (CIE76) ────────────────────────────────────────────
@@ -578,7 +580,7 @@ export async function processImage(
           const hiH = rows * hiResMult;
 
           // 3. Sigmoid contrast
-          sigmoidContrast(hiRes.data, hiW, hiH, 7);
+          sigmoidContrast(hiRes.data, hiW, hiH, 5);
 
           // 4. Local contrast boost
           localContrastBoost(hiRes.data, hiW, hiH);
@@ -588,7 +590,7 @@ export async function processImage(
 
           // 6. Bilateral filter
           for (let p = 0; p < filterPasses; p++) {
-            bilateralFilter(hiRes.data, hiW, hiH, 3.0, 25, 3);
+            bilateralFilter(hiRes.data, hiW, hiH, 3.0, 16, 3);
           }
 
           // 7. Laplacian sharpen

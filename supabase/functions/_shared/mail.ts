@@ -64,6 +64,8 @@ function sizeLabel(kitSize?: string | null) {
   if (kitSize === "stamp_kit_40x50") return "40×50 cm";
   if (kitSize === "stamp_kit_30x40") return "30×40 cm";
   if (kitSize === "stamp_kit_A4") return "A4 (21×30 cm)";
+  if (kitSize === "stamp_kit_A3") return "A3 (29,7×42 cm)";
+  if (kitSize === "stamp_kit_A2") return "A2 (42×59,4 cm)";
   return kitSize || "";
 }
 

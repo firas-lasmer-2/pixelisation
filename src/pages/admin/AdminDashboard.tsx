@@ -19,6 +19,8 @@ const SIZE_LABELS: Record<string, string> = {
   stamp_kit_40x50: "40×50 cm",
   stamp_kit_30x40: "30×40 cm",
   stamp_kit_A4: "A4",
+  stamp_kit_A3: "A3",
+  stamp_kit_A2: "A2",
 };
 
 export default function AdminDashboard() {

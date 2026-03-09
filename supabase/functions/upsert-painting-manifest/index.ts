@@ -9,6 +9,20 @@ function json(status: number, body: Record<string, unknown>) {
   });
 }
 
+function sanitizeDedicationText(value: unknown) {
+  if (typeof value !== "string") return null;
+
+  const normalized = value
+    .normalize("NFKC")
+    .replace(/\p{Extended_Pictographic}/gu, "")
+    .replace(/[\r\n]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 22);
+
+  return normalized || null;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -41,15 +55,38 @@ serve(async (req) => {
       return json(404, { error: "Order not found" });
     }
 
+    const resolvedDedicationText =
+      sanitizeDedicationText(manifest?.dedication?.text) ||
+      sanitizeDedicationText(manifest?.dedicationText) ||
+      null;
+
     const resolvedManifest = {
       ...manifest,
+      version: 3,
       orderRef: order.order_ref,
       instructionCode: order.instruction_code,
+      dedicationText: resolvedDedicationText,
+      dedication:
+        resolvedDedicationText && manifest?.dedication
+          ? {
+              ...manifest.dedication,
+              text: resolvedDedicationText,
+            }
+          : null,
       sourceImageUrl:
         typeof manifest.sourceImageUrl === "string" && !manifest.sourceImageUrl.startsWith("data:")
           ? manifest.sourceImageUrl
           : order.photo_url,
     };
+
+    const { error: orderUpdateError } = await supabase
+      .from("orders")
+      .update({
+        dedication_text: resolvedDedicationText,
+      })
+      .eq("id", order.id);
+
+    if (orderUpdateError) throw orderUpdateError;
 
     const { error: upsertError } = await supabase
       .from("painting_manifests")
@@ -65,6 +102,7 @@ serve(async (req) => {
     return json(200, {
       success: true,
       instructionCode: order.instruction_code,
+      manifest: resolvedManifest,
     });
   } catch (error) {
     console.error("upsert-painting-manifest error", error);

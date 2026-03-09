@@ -24,18 +24,24 @@ const ASPECT_RATIOS: Record<KitSize, number> = {
   "40x50": 4 / 5,
   "30x40": 3 / 4,
   "A4": 21 / 29.7,
+  "A3": 29.7 / 42,
+  "A2": 42 / 59.4,
 };
 
 const KIT_LABELS: Record<KitSize, string> = {
   "40x50": "40 × 50 cm",
   "30x40": "30 × 40 cm",
   "A4": "A4 (21 × 29,7 cm)",
+  "A3": "A3 (29,7 × 42 cm)",
+  "A2": "A2 (42 × 59,4 cm)",
 };
 
 const MIN_RESOLUTION: Record<KitSize, { w: number; h: number }> = {
   "40x50": { w: 160, h: 200 },
   "30x40": { w: 120, h: 160 },
   "A4": { w: 84, h: 119 },
+  "A3": { w: 118, h: 168 },
+  "A2": { w: 168, h: 237 },
 };
 
 function getQualityInfo(w: number, h: number, kitSize: KitSize) {

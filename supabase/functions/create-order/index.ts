@@ -7,6 +7,8 @@ const PRICING: Record<string, number> = {
   stamp_kit_40x50: 449,
   stamp_kit_30x40: 349,
   stamp_kit_A4: 249,
+  stamp_kit_A3: 299,
+  stamp_kit_A2: 399,
 };
 
 type CreateOrderPayload = {
@@ -45,6 +47,20 @@ function json(status: number, body: Record<string, unknown>) {
 
 function normalizePhone(phone: string) {
   return phone.replace(/\D/g, "");
+}
+
+function sanitizeDedicationText(value: string | null | undefined) {
+  if (!value) return null;
+
+  const normalized = value
+    .normalize("NFKC")
+    .replace(/\p{Extended_Pictographic}/gu, "")
+    .replace(/[\r\n]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 22);
+
+  return normalized || null;
 }
 
 function createOrderRef() {
@@ -217,8 +233,9 @@ serve(async (req) => {
     if (mainPhotoUrl) {
       orderUpdates.photo_url = mainPhotoUrl;
     }
-    if (payload.dedicationText?.trim()) {
-      orderUpdates.dedication_text = payload.dedicationText.trim();
+    const dedicationText = sanitizeDedicationText(payload.dedicationText);
+    if (dedicationText) {
+      orderUpdates.dedication_text = dedicationText;
     }
 
     if (Object.keys(orderUpdates).length > 0) {
