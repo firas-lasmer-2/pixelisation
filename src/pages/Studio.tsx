@@ -22,10 +22,12 @@ import { UploadZone } from "@/components/UploadZone";
 import { CategorySelector } from "@/components/studio/CategorySelector";
 import { DreamJobPicker } from "@/components/studio/DreamJobPicker";
 import { MultiUploadZone } from "@/components/studio/MultiUploadZone";
+import { StylePreviewCard } from "@/components/studio/StylePreviewCard";
 import { SaveProgressModal } from "@/components/shared/SaveProgressModal";
 import { CropScreen } from "@/components/CropScreen";
 import { ProcessingScreen } from "@/components/ProcessingScreen";
 import { processImage, ProcessingResult } from "@/lib/imageProcessing";
+import { getStyleDefinition, getStyleDescription, getStyleLabel, orderStyleResults } from "@/lib/styles";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -481,15 +483,11 @@ const Studio = () => {
 
     try {
       const results = await processImage(photo, croppedArea, imgKitSize);
-      const styleMap: Record<string, ArtStyle> = { original: "original", vintage: "vintage", popart: "pop_art" };
-      const allPreviews: typeof previews = [];
-
-      for (const result of results) {
-        const artStyle = styleMap[result.styleKey];
-        if (artStyle) {
-          allPreviews.push({ style: artStyle, results: [result], previewUrl: result.dataUrl });
-        }
-      }
+      const allPreviews: typeof previews = orderStyleResults(results).map((result) => ({
+        style: result.styleKey,
+        results: [result],
+        previewUrl: result.dataUrl,
+      }));
 
       setPreviews(allPreviews);
       setProcessing(false);
@@ -1186,50 +1184,27 @@ const Studio = () => {
                     subtitle={t.studio.step2.subtitle}
                   />
 
-                  <div className="grid gap-5 sm:grid-cols-3">
+                  <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-5">
                     {previews.map((p, i) => {
                       const isSelected = order.selectedStyle === p.style;
-                      const styleName = p.style === "original" ? t.styles.original.name :
-                        p.style === "vintage" ? t.styles.vintage.name : t.styles.popArt.name;
-                      const styleDesc = p.style === "original" ? t.styles.original.description :
-                        p.style === "vintage" ? t.styles.vintage.description : t.styles.popArt.description;
+                      const styleName = getStyleLabel(t, p.style);
+                      const styleDesc = getStyleDescription(t, p.style);
+                      const styleMeta = getStyleDefinition(p.style);
+                      const palette = p.results[0]?.palette;
+                      if (!palette) return null;
+
                       return (
-                        <div
-                          key={p.style}
-                          className={`group cursor-pointer overflow-hidden rounded-xl border bg-card transition-all duration-300 hover:-translate-y-1 hover:shadow-xl ${
-                            isSelected ? "gold-glow scale-[1.02]" : "hover:shadow-lg"
-                          }`}
-                          onClick={() => setStyle(p.style, p.previewUrl)}
-                          style={{ animationDelay: `${i * 100}ms` }}
-                        >
-                          {p.style === "original" && (
-                            <div className="absolute top-2 right-2 z-10">
-                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2.5 py-1 rounded-full bg-accent/10 text-accent border border-accent/20">
-                                <Star className="h-3 w-3" />
-                                Populaire
-                              </span>
-                            </div>
-                          )}
-                          <div className="aspect-[3/4] overflow-hidden relative">
-                            <img src={p.previewUrl} alt={styleName} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110" />
-                            <div className="absolute inset-0 bg-gradient-to-t from-foreground/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                          </div>
-                          <div className="p-4">
-                            <p className="font-semibold text-center" style={{ fontFamily: "'Playfair Display', serif" }}>{styleName}</p>
-                            <p className="text-xs text-muted-foreground mt-1 text-center line-clamp-2">{styleDesc}</p>
-                            <div className="flex justify-center gap-1.5 mt-3">
-                              {(p.results[0]?.palette?.colors || []).map((color, ci) => (
-                                <div key={ci} className="w-5 h-5 rounded-full border-2 border-background shadow-sm transition-transform hover:scale-125" style={{ backgroundColor: color.hex }} title={color.name} />
-                              ))}
-                            </div>
-                            {isSelected && (
-                              <div className="mt-3 flex justify-center">
-                                <span className="inline-flex items-center gap-1 text-xs font-semibold text-primary animate-scale-in">
-                                  <Check className="h-3.5 w-3.5" /> Sélectionné
-                                </span>
-                              </div>
-                            )}
-                          </div>
+                        <div key={p.style} style={{ animationDelay: `${i * 100}ms` }}>
+                          <StylePreviewCard
+                            badgeLabel={styleMeta.badgeLabel}
+                            colorCountLabel={`${palette.colors.length} ${t.viewer.colors}`}
+                            isSelected={isSelected}
+                            onSelect={() => setStyle(p.style, p.previewUrl)}
+                            palette={palette}
+                            previewUrl={p.previewUrl}
+                            styleDescription={styleDesc}
+                            styleName={styleName}
+                          />
                         </div>
                       );
                     })}
@@ -1404,9 +1379,7 @@ const Studio = () => {
                               <span className="text-muted-foreground">Style</span>
                               <div className="flex items-center gap-2">
                                 <span className="font-medium">
-                                  {order.selectedStyle === "original" ? t.styles.original.name :
-                                   order.selectedStyle === "vintage" ? t.styles.vintage.name :
-                                   t.styles.popArt.name}
+                                  {order.selectedStyle ? getStyleLabel(t, order.selectedStyle) : "-"}
                                 </span>
                                 <button onClick={() => goToStep(getStyleStep())} className="text-primary hover:text-primary/70 transition-colors"><Edit3 className="h-3 w-3" /></button>
                               </div>
@@ -1543,6 +1516,14 @@ const Studio = () => {
 };
 
 export default Studio;
+
+
+
+
+
+
+
+
 
 
 

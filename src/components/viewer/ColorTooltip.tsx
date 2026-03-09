@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { COLOR_LETTERS } from "@/lib/palettes";
+import { getColorLabel } from "@/lib/palettes";
 
 interface ColorTooltipProps {
   x: number;
@@ -34,10 +34,11 @@ export function ColorTooltip({ x, y, colorIdx, colorName, colorHex, visible }: C
           className="w-3.5 h-3.5 rounded border border-border"
           style={{ backgroundColor: colorHex }}
         />
-        <span className="font-bold">{COLOR_LETTERS[colorIdx]}</span>
+        <span className="font-bold">{getColorLabel(colorIdx)}</span>
         <span className="text-muted-foreground">{colorName}</span>
         <span className="text-muted-foreground/70">{colorHex}</span>
       </div>
     </div>
   );
 }
+

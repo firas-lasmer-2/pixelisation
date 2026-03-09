@@ -11,10 +11,11 @@ import {
   isKitSize,
   type KitSize,
 } from "@/lib/kitCatalog";
-import { COMPACT_PALETTES, PALETTES, type StylePalette } from "@/lib/palettes";
+import { resolveLegacyPalette, type StylePalette } from "@/lib/palettes";
 import type { ArtStyle, OrderState } from "@/lib/store";
 import { getPhoto } from "@/lib/store";
 import { getPaintingStats } from "@/lib/paintingLayout";
+import { getStyleDefinition, normalizeArtStyle } from "@/lib/styles";
 
 type LegacyViewerData = {
   indices: number[];
@@ -28,12 +29,15 @@ type LegacyViewerData = {
 type RawManifest = Partial<PaintingManifest> & {
   dedicationText?: string | null;
   dedication?: PaintingDedication | null;
+  styleProfileKey?: string;
+  styleProfileVersion?: number;
+  paletteSnapshot?: StylePalette | null;
 };
 
 type ManifestBase = Omit<PaintingManifest, "version" | "dedication" | "referenceImageUrl" | "previewDataUrl">;
 
 export interface PaintingManifest {
-  version: 3;
+  version: 4;
   orderRef: string;
   instructionCode: string;
   category: string;
@@ -41,6 +45,9 @@ export interface PaintingManifest {
   canvasLabel: string;
   artStyle: ArtStyle;
   paletteKey: string;
+  styleProfileKey: ArtStyle;
+  styleProfileVersion: number;
+  paletteSnapshot: StylePalette;
   createdAt: string;
   dedicationText: string | null;
   dedication: PaintingDedication | null;
@@ -74,14 +81,32 @@ function inferKitSize(gridCols: number, gridRows: number): KitSize {
   return DEFAULT_PUBLIC_KIT;
 }
 
-export function orderStyleToPaletteKey(style: ArtStyle | string) {
-  return style === "pop_art" ? "popart" : style;
+function resolveStyleProfileVersion(style: ArtStyle, version?: number | null) {
+  if (typeof version === "number" && Number.isFinite(version)) return version;
+  return getStyleDefinition(style).profileVersion;
 }
 
-export function resolveManifestPalette(manifest: Pick<PaintingManifest, "kitSize" | "artStyle">): StylePalette {
-  const paletteKey = orderStyleToPaletteKey(manifest.artStyle);
-  const palettes = manifest.kitSize === "stamp_kit_A4" ? COMPACT_PALETTES : PALETTES;
-  return palettes[paletteKey] || PALETTES.original;
+function resolveManifestStylePalette(rawPalette: unknown, style: ArtStyle): StylePalette {
+  if (
+    rawPalette &&
+    typeof rawPalette === "object" &&
+    Array.isArray((rawPalette as StylePalette).colors) &&
+    (rawPalette as StylePalette).colors.length > 0
+  ) {
+    return rawPalette as StylePalette;
+  }
+
+  return resolveLegacyPalette(style);
+}
+
+export function orderStyleToPaletteKey(style: ArtStyle | string) {
+  return normalizeArtStyle(style);
+}
+
+export function resolveManifestPalette(
+  manifest: Pick<PaintingManifest, "paletteSnapshot" | "artStyle">,
+): StylePalette {
+  return resolveManifestStylePalette(manifest.paletteSnapshot, normalizeArtStyle(manifest.artStyle));
 }
 
 function materializeManifest(base: ManifestBase): PaintingManifest {
@@ -105,7 +130,8 @@ function materializeManifest(base: ManifestBase): PaintingManifest {
 
   return {
     ...base,
-    version: 3,
+    version: 4,
+    paletteSnapshot: palette,
     dedicationText: applied.dedication?.text || null,
     dedication: applied.dedication,
     referenceImageUrl,
@@ -121,6 +147,9 @@ function buildBaseManifest(input: {
   kitSize: KitSize;
   artStyle: ArtStyle;
   paletteKey: string;
+  styleProfileKey: ArtStyle;
+  styleProfileVersion: number;
+  paletteSnapshot: StylePalette;
   createdAt: string;
   dedicationText: string | null;
   sourceImageUrl: string | null;
@@ -131,10 +160,6 @@ function buildBaseManifest(input: {
 }) {
   const kit = getKitConfig(input.kitSize);
   const stats = getPaintingStats(input.gridCols, input.gridRows);
-  const palette = resolveManifestPalette({
-    kitSize: input.kitSize,
-    artStyle: input.artStyle,
-  });
 
   return {
     orderRef: input.orderRef,
@@ -144,6 +169,9 @@ function buildBaseManifest(input: {
     canvasLabel: kit.manifestLabel,
     artStyle: input.artStyle,
     paletteKey: input.paletteKey,
+    styleProfileKey: input.styleProfileKey,
+    styleProfileVersion: input.styleProfileVersion,
+    paletteSnapshot: input.paletteSnapshot,
     createdAt: input.createdAt,
     dedicationText: sanitizeDedicationText(input.dedicationText) || null,
     sourceImageUrl: input.sourceImageUrl,
@@ -153,12 +181,34 @@ function buildBaseManifest(input: {
     indices: input.indices,
     stats: {
       ...stats,
-      colorCount: palette.colors.length,
+      colorCount: input.paletteSnapshot.colors.length,
       estimatedHours: kit.hoursLabel,
       difficultyLabel: kit.manifestDifficultyLabel,
       difficultyLevel: kit.difficultyLevel,
     },
   } satisfies ManifestBase;
+}
+
+function finalizeManifest(base: ManifestBase, raw: RawManifest | null) {
+  const referenceImageUrl = typeof raw?.referenceImageUrl === "string" && raw.referenceImageUrl.length > 0
+    ? raw.referenceImageUrl
+    : null;
+
+  if (referenceImageUrl) {
+    return {
+      ...base,
+      version: 4,
+      dedication: raw?.dedication || null,
+      referenceImageUrl,
+      previewDataUrl:
+        typeof raw?.previewDataUrl === "string" && raw.previewDataUrl.length > 0
+          ? raw.previewDataUrl
+          : referenceImageUrl,
+      indices: base.indices,
+    } satisfies PaintingManifest;
+  }
+
+  return materializeManifest(base);
 }
 
 export function getPaintingManifestStorageKey(instructionCode: string) {
@@ -183,15 +233,21 @@ export function normalizePaintingManifest(raw: unknown, instructionCode: string)
       return null;
     }
 
+    const artStyle = normalizeArtStyle(legacy.paletteKey);
+    const paletteSnapshot = resolveLegacyPalette(artStyle);
     const inferredKitSize = inferKitSize(legacy.gridCols, legacy.gridRows);
-    return materializeManifest(
+
+    return finalizeManifest(
       buildBaseManifest({
         orderRef: "",
         instructionCode,
         category: "classic",
         kitSize: inferredKitSize,
-        artStyle: legacy.paletteKey === "popart" ? "pop_art" : (legacy.paletteKey as ArtStyle),
-        paletteKey: legacy.paletteKey,
+        artStyle,
+        paletteKey: orderStyleToPaletteKey(artStyle),
+        styleProfileKey: artStyle,
+        styleProfileVersion: 0,
+        paletteSnapshot,
         createdAt: legacy.createdAt || new Date().toISOString(),
         dedicationText: null,
         sourceImageUrl: null,
@@ -200,6 +256,10 @@ export function normalizePaintingManifest(raw: unknown, instructionCode: string)
         gridRows: legacy.gridRows,
         indices: legacy.indices,
       }),
+      {
+        referenceImageUrl: legacy.previewDataUrl,
+        previewDataUrl: legacy.previewDataUrl,
+      } as RawManifest,
     );
   }
 
@@ -207,7 +267,9 @@ export function normalizePaintingManifest(raw: unknown, instructionCode: string)
     candidate.kitSize && isKitSize(candidate.kitSize)
       ? candidate.kitSize
       : inferKitSize(candidate.gridCols, candidate.gridRows);
-  const artStyle = candidate.artStyle || (candidate.paletteKey === "popart" ? "pop_art" : "original");
+  const artStyle = normalizeArtStyle(candidate.artStyle || candidate.paletteKey || "original");
+  const styleProfileKey = normalizeArtStyle(candidate.styleProfileKey || artStyle);
+  const paletteSnapshot = resolveManifestStylePalette(candidate.paletteSnapshot, artStyle);
   const base = buildBaseManifest({
     orderRef: candidate.orderRef || "",
     instructionCode: candidate.instructionCode || instructionCode,
@@ -215,6 +277,9 @@ export function normalizePaintingManifest(raw: unknown, instructionCode: string)
     kitSize: inferredKitSize,
     artStyle,
     paletteKey: candidate.paletteKey || orderStyleToPaletteKey(artStyle),
+    styleProfileKey,
+    styleProfileVersion: resolveStyleProfileVersion(styleProfileKey, candidate.styleProfileVersion),
+    paletteSnapshot,
     createdAt: candidate.createdAt || new Date().toISOString(),
     dedicationText: candidate.dedication?.text || candidate.dedicationText || null,
     sourceImageUrl:
@@ -230,21 +295,7 @@ export function normalizePaintingManifest(raw: unknown, instructionCode: string)
     indices: candidate.indices,
   });
 
-  if (candidate.version === 3 && typeof candidate.referenceImageUrl === "string") {
-    return {
-      ...base,
-      version: 3,
-      dedication: candidate.dedication || null,
-      referenceImageUrl: candidate.referenceImageUrl,
-      previewDataUrl:
-        typeof candidate.previewDataUrl === "string" && candidate.previewDataUrl.length > 0
-          ? candidate.previewDataUrl
-          : candidate.referenceImageUrl,
-      indices: candidate.indices,
-    } satisfies PaintingManifest;
-  }
-
-  return materializeManifest(base);
+  return finalizeManifest(base, candidate);
 }
 
 export function loadPaintingManifestLocally(instructionCode: string) {
@@ -279,8 +330,11 @@ export function buildPaintingManifest(input: {
       instructionCode: order.instructionCode,
       category: order.category,
       kitSize,
-      artStyle: order.selectedStyle || "original",
-      paletteKey: result.styleKey,
+      artStyle: normalizeArtStyle(order.selectedStyle || result.styleKey),
+      paletteKey: orderStyleToPaletteKey(result.styleKey),
+      styleProfileKey: result.styleProfileKey,
+      styleProfileVersion: result.styleProfileVersion,
+      paletteSnapshot: result.palette,
       createdAt: new Date().toISOString(),
       dedicationText: input.dedicationText ?? order.dedicationText ?? null,
       sourceImageUrl: order.aiGeneratedUrl || getPhoto(order) || null,

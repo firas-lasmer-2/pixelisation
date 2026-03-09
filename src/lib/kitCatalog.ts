@@ -149,7 +149,7 @@ export const KIT_CATALOG: Record<KitSize, KitCatalogEntry> = {
     originalPrice: 389,
     gridCols: 118,
     gridRows: 168,
-    colorsLabel: "12-15",
+    colorsLabel: "10",
     hoursLabel: "8-20 h",
     difficultyLevel: 2,
     displayDifficultyLabel: "Intermédiaire",
@@ -257,7 +257,7 @@ export const KIT_CATALOG: Record<KitSize, KitCatalogEntry> = {
     originalPrice: 499,
     gridCols: 168,
     gridRows: 237,
-    colorsLabel: "12-15",
+    colorsLabel: "12",
     hoursLabel: "20-40 h",
     difficultyLevel: 4,
     displayDifficultyLabel: "Expert",
@@ -412,6 +412,10 @@ export function getKitComparisonStats(size: KitSize) {
 export const MAX_KIT_DIFFICULTY = Math.max(
   ...Object.values(KIT_CATALOG).map((kit) => kit.difficultyLevel),
 );
+
+
+
+
 
 
 

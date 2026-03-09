@@ -1,6 +1,6 @@
 import jsPDF from "jspdf";
 import QRCode from "qrcode";
-import { PaletteColor, StylePalette, COLOR_LETTERS } from "./palettes";
+import { PaletteColor, StylePalette, getColorLabel } from "./palettes";
 import { renderSmoothPreview } from "./imageProcessing";
 import { BRAND as BRAND_CONFIG } from "./brand";
 import { getPaintingStats, PAGE_GRID_COLS, PAGE_GRID_ROWS, SECTION_COLS, SECTION_ROWS, SECTIONS_PER_PAGE } from "./paintingLayout";
@@ -288,7 +288,7 @@ function renderCoverPage(doc: jsPDF, options: PdfOptions, colorCounts: number[],
     doc.setFont("helvetica", "bold");
     doc.setFontSize(Math.min(5, spacing * 0.6));
     doc.setTextColor(...BRAND.charcoal);
-    doc.text(COLOR_LETTERS[i], cx, stripY + 5.5, { align: "center" });
+    doc.text(getColorLabel(i), cx, stripY + 5.5, { align: "center" });
   });
 
   if (options.viewerUrl && options.instructionCode) {
@@ -471,7 +471,7 @@ function renderLegendPage(doc: jsPDF, options: PdfOptions, colorCounts: number[]
     doc.setFont("helvetica", "bold");
     doc.setFontSize(7);
     doc.setTextColor(255, 255, 255);
-    doc.text(COLOR_LETTERS[i], colX + 11, rowY + 2.5, { align: "center" });
+    doc.text(getColorLabel(i), colX + 11, rowY + 2.5, { align: "center" });
 
     // Color name
     doc.setFont("helvetica", "bold");
@@ -685,7 +685,7 @@ function renderMiniSection(
       doc.setFont("helvetica", "bold");
       doc.setFontSize(Math.min(5.5, cellSize * 0.6));
       doc.text(
-        COLOR_LETTERS[colorIdx] || String(colorIdx),
+        getColorLabel(colorIdx),
         x + cellSize / 2,
         y + cellSize / 2 + cellSize * 0.2,
         { align: "center" }
@@ -819,7 +819,7 @@ async function renderAssemblyPage(doc: jsPDF, options: PdfOptions, totalPages: n
   doc.setDrawColor(...BRAND.goldLight);
   doc.setLineWidth(0.3);
 
-  const sorted = palette.colors.map((c, i) => ({ color: c, letter: COLOR_LETTERS[i], idx: i }))
+  const sorted = palette.colors.map((c, i) => ({ color: c, letter: getColorLabel(i), idx: i }))
     .sort((a, b) => {
       const [ar, ag, ab] = hexToRgb(a.color.hex);
       const [br, bg, bb] = hexToRgb(b.color.hex);
@@ -939,3 +939,4 @@ export function getSectionStats(gridCols: number, gridRows: number) {
   const { totalSections, totalPages, sectionCols, sectionRows } = getPaintingStats(gridCols, gridRows);
   return { totalSections, totalPages, sectionCols, sectionRows };
 }
+

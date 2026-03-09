@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import { PaletteColor, StylePalette } from "@/lib/palettes";
+import { StylePalette, getColorLabel } from "@/lib/palettes";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -19,7 +19,6 @@ import { SectionMinimap } from "@/components/viewer/SectionMinimap";
 import { ViewerToolbar } from "@/components/viewer/ViewerToolbar";
 import { ColorTooltip } from "@/components/viewer/ColorTooltip";
 import { renderSmoothPreview } from "@/lib/imageProcessing";
-import { COLOR_LETTERS } from "@/lib/palettes";
 import { STORAGE_KEYS } from "@/lib/brand";
 import { SECTION_COLS, SECTION_ROWS } from "@/lib/paintingLayout";
 
@@ -408,7 +407,7 @@ export function GridViewer({ indices, gridCols, gridRows, palette, previewDataUr
           ctx.font = `bold ${Math.max(11, 14 * zoom)}px sans-serif`;
           ctx.textAlign = "center";
           ctx.fillText(
-            COLOR_LETTERS[colorIdx] || String(colorIdx),
+            getColorLabel(colorIdx),
             x + cellSize / 2,
             y + cellSize / 2 + 5 * zoom
           );
@@ -764,3 +763,5 @@ export function GridViewer({ indices, gridCols, gridRows, palette, previewDataUr
     </div>
   );
 }
+
+

@@ -11,6 +11,7 @@ import { CheckCircle, Home, Copy, FileText, Truck, Package, MapPin, Share2, Chec
 import { RegenerationRequestForm } from "@/components/shared/RegenerationRequestForm";
 import { BRAND, buildTrackUrl } from "@/lib/brand";
 import { getKitDisplayLabel } from "@/lib/kitCatalog";
+import { getStyleLabel } from "@/lib/styles";
 
 function ConfettiParticle({ delay, color }: { delay: number; color: string }) {
   const left = Math.random() * 100;
@@ -86,8 +87,7 @@ const Confirmation = () => {
 
   const shareWhatsApp = () => {
     const sizeLabel = order.selectedSize ? getKitDisplayLabel(order.selectedSize) : "Kit";
-    const styleLabel = order.selectedStyle === "original" ? "Original" :
-      order.selectedStyle === "vintage" ? "Vintage" : "Pop Art";
+    const styleLabel = order.selectedStyle ? getStyleLabel(t, order.selectedStyle) : "Original";
     const trackUrl = buildTrackUrl(order.orderRef, order.instructionCode, window.location.origin);
     const msg = [
       `🎨 Ma commande ${BRAND.name} est confirmée !`,
@@ -281,3 +281,4 @@ const Confirmation = () => {
 };
 
 export default Confirmation;
+

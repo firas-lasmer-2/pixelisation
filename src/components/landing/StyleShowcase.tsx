@@ -1,22 +1,16 @@
 import { useTranslation } from "@/i18n";
-import { PALETTES } from "@/lib/palettes";
+import { getShowcasePalette } from "@/lib/palettes";
+import { getPublicStyles } from "@/lib/styles";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
 import { Sparkles } from "lucide-react";
-
-const styleKeys = ["original", "vintage", "popArt"] as const;
-const paletteIds = ["original", "vintage", "popart"] as const;
-const styleImages = [
-  "/images/style-original.jpg",
-  "/images/style-vintage.jpg",
-  "/images/style-popart.jpg",
-];
 
 export function StyleShowcase() {
   const { t } = useTranslation();
   const sectionRef = useScrollReveal();
+  const styles = getPublicStyles();
+
   return (
     <section id="styles" className="relative bg-card py-24 md:py-32">
-      {/* Decorative top border */}
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
 
       <div className="container mx-auto px-4">
@@ -28,12 +22,21 @@ export function StyleShowcase() {
           <p className="text-lg text-muted-foreground">{t.styles.sectionSubtitle}</p>
         </div>
 
-        <div className="mx-auto grid max-w-6xl gap-8 md:grid-cols-3">
-          {styleKeys.map((key, i) => {
-            const style = t.styles[key];
-            const palette = PALETTES[paletteIds[i]];
+        <div className="mx-auto grid max-w-7xl gap-8 md:grid-cols-2 xl:grid-cols-5">
+          {styles.map((style, index) => {
+            const copy = t.styles[style.translationKey];
+            const palette = getShowcasePalette(style.key);
             return (
-              <StyleCard key={key} style={style} palette={palette} image={styleImages[i]} index={i} isFirst={i === 0} />
+              <StyleCard
+                key={style.key}
+                title={copy.name}
+                description={copy.description}
+                palette={palette}
+                styleIndex={index}
+                badgeLabel={style.badgeLabel}
+                imageUrl={style.showcase.imageUrl}
+                background={style.showcase.background}
+              />
             );
           })}
         </div>
@@ -43,69 +46,71 @@ export function StyleShowcase() {
 }
 
 function StyleCard({
-  style,
+  title,
+  description,
   palette,
-  image,
-  index,
-  isFirst,
+  styleIndex,
+  badgeLabel,
+  imageUrl,
+  background,
 }: {
-  style: { name: string; description: string };
-  palette: any;
-  image: string;
-  index: number;
-  isFirst: boolean;
+  title: string;
+  description: string;
+  palette: ReturnType<typeof getShowcasePalette>;
+  styleIndex: number;
+  badgeLabel?: string;
+  imageUrl?: string;
+  background: string;
 }) {
-  const ref = useScrollReveal({ staggerDelay: index * 150 });
+  const ref = useScrollReveal({ staggerDelay: styleIndex * 110 });
 
   return (
     <div ref={ref} className="scroll-reveal">
       <div className="group relative overflow-hidden rounded-2xl border-2 border-border bg-background transition-all duration-500 hover:border-primary/30 hover:shadow-2xl hover:-translate-y-3">
-        {/* Popular badge */}
-        {isFirst && (
+        {badgeLabel && (
           <div className="absolute top-4 end-4 z-10 flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-lg">
             <Sparkles className="h-3 w-3" />
-            Popular
+            {badgeLabel}
           </div>
         )}
 
-        {/* Image with overlay on hover */}
         <div className="relative aspect-[3/4] overflow-hidden">
-          <img
-            src={image}
-            alt={style.name}
-            className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
-          />
+          {imageUrl ? (
+            <img
+              src={imageUrl}
+              alt={title}
+              className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
+            />
+          ) : (
+            <div className="relative h-full w-full transition-transform duration-700 group-hover:scale-105" style={{ background }}>
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.28),transparent_40%)]" />
+              <div className="absolute bottom-10 left-8 h-24 w-24 rounded-full bg-white/20 blur-2xl" />
+              <div className="absolute right-8 top-12 h-16 w-28 rounded-full border border-white/30 bg-white/10 backdrop-blur-sm" />
+              <div className="absolute inset-x-8 bottom-8 h-24 rounded-[28px] border border-white/20 bg-white/10 backdrop-blur-sm" />
+            </div>
+          )}
           <div className="absolute inset-0 bg-gradient-to-t from-background via-background/20 to-transparent opacity-60" />
-          
-          {/* Title overlay at bottom of image */}
           <div className="absolute inset-x-0 bottom-0 p-6">
-            <h3 className="text-2xl font-bold text-foreground">{style.name}</h3>
+            <h3 className="text-2xl font-bold text-foreground">{title}</h3>
           </div>
         </div>
 
-        {/* Color palette strip */}
         <div className="flex h-2">
-          {palette?.colors.slice(0, 8).map((c: any, j: number) => (
-            <div key={j} className="flex-1 transition-all duration-300 group-hover:h-3" style={{ backgroundColor: c.hex }} />
+          {palette.colors.map((color, index) => (
+            <div key={`${title}-${index}`} className="flex-1 transition-all duration-300 group-hover:h-3" style={{ backgroundColor: color.hex }} />
           ))}
         </div>
 
-        {/* Content */}
         <div className="p-6">
-          <p className="mb-4 text-sm leading-relaxed text-muted-foreground">{style.description}</p>
-          
-          {/* Swatches with names */}
+          <p className="mb-4 text-sm leading-relaxed text-muted-foreground">{description}</p>
           <div className="flex flex-wrap gap-2">
-            {palette?.colors.slice(0, 6).map((c: any, j: number) => (
+            {palette.colors.slice(0, 6).map((color) => (
               <div
-                key={j}
+                key={`${title}-${color.hex}`}
                 className="flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 transition-all group-hover:border-primary/20"
               >
-                <div
-                  className="h-3 w-3 rounded-full ring-1 ring-border"
-                  style={{ backgroundColor: c.hex }}
-                />
-                <span className="text-[10px] font-medium text-muted-foreground">{c.label}</span>
+                <div className="h-3 w-3 rounded-full ring-1 ring-border" style={{ backgroundColor: color.hex }} />
+                <span className="text-[10px] font-medium text-muted-foreground">{color.name}</span>
               </div>
             ))}
           </div>

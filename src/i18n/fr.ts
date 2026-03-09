@@ -32,7 +32,7 @@ export const fr = {
       },
       {
         title: "Choisissez votre style",
-        description: "Original, Vintage ou Pop Art — prévisualisez le résultat avant de commander.",
+        description: "Choisissez parmi cinq styles artistiques — prévisualisez le résultat avant de commander.",
       },
       {
         title: "Confirmez votre commande",
@@ -47,18 +47,26 @@ export const fr = {
 
   styles: {
     sectionTitle: "Nos styles artistiques",
-    sectionSubtitle: "Chaque style transforme votre photo en une œuvre d'art unique",
+    sectionSubtitle: "Cinq directions visuelles nettes, pensées pour des kits plus lisibles et plus beaux à peindre.",
     original: {
       name: "Original",
-      description: "Des couleurs fidèles et naturelles pour un résultat réaliste et détaillé.",
+      description: "Une palette naturelle et équilibrée pour préserver les carnations, les vêtements et les ombres avec plus de fidélité.",
     },
     vintage: {
       name: "Vintage",
-      description: "Des teintes chaudes et nostalgiques pour un rendu classique et élégant.",
+      description: "Des teintes chaudes, patinées et élégantes pour un rendu nostalgique plus riche.",
     },
     popArt: {
       name: "Pop Art",
-      description: "Des couleurs vives et audacieuses inspirées du style d'Andy Warhol.",
+      description: "Des couleurs fortes, séparées et ultra graphiques pour un rendu pop assumé.",
+    },
+    watercolor: {
+      name: "Aquarelle",
+      description: "Des lavis doux et lumineux, avec des contours plus souples et une ambiance délicate.",
+    },
+    poster: {
+      name: "Poster",
+      description: "Des formes plus franches, des contrastes nets et une lecture très claire du portrait.",
     },
   },
 
@@ -407,3 +415,6 @@ export const fr = {
 };
 
 export type Translations = typeof fr;
+
+
+

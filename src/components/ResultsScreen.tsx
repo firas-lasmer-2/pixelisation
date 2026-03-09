@@ -26,7 +26,7 @@ export function ResultsScreen({ results, onReset }: ResultsScreenProps) {
         <p className="text-muted-foreground">Click a style to select it</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-6">
         {results.map((result) => {
           const isSelected = selected === result.styleKey;
           return (
@@ -105,3 +105,4 @@ export function ResultsScreen({ results, onReset }: ResultsScreenProps) {
     </div>
   );
 }
+

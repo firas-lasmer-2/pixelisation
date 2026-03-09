@@ -7,7 +7,7 @@ import { isCreateOrderPayloadTooLarge, optimizeOrderImageSource } from "@/lib/or
 
 export type OrderCategory = "classic" | "family" | "kids_dream" | "pet";
 export type KitSize = CatalogKitSize;
-export type ArtStyle = "original" | "vintage" | "pop_art";
+export type ArtStyle = "original" | "vintage" | "pop_art" | "watercolor" | "poster";
 export type AddOnId = "extra_paint" | "gift_wrap" | "frame";
 
 export const ADD_ONS = [
@@ -287,3 +287,4 @@ export const TUNISIAN_GOVERNORATES = [
   "Kasserine", "Sidi Bouzid", "Gabès", "Médenine",
   "Tataouine", "Gafsa", "Tozeur", "Kébili",
 ];
+

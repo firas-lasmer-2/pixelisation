@@ -62,7 +62,7 @@ serve(async (req) => {
 
     const resolvedManifest = {
       ...manifest,
-      version: 3,
+      version: 4,
       orderRef: order.order_ref,
       instructionCode: order.instruction_code,
       dedicationText: resolvedDedicationText,
@@ -111,3 +111,4 @@ serve(async (req) => {
     });
   }
 });
+

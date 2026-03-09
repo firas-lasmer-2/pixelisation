@@ -28,6 +28,7 @@ import {
   sanitizeDedicationText,
 } from "@/lib/dedicationOverlay";
 import { buildViewerUrl, BRAND } from "@/lib/brand";
+import { getStyleLabel } from "@/lib/styles";
 import { getKitConfig, resolveProcessingKitSize } from "@/lib/kitCatalog";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -75,6 +76,7 @@ const Download = () => {
   const selectedKit = order.selectedSize ? getKitConfig(order.selectedSize) : null;
   const kitSize = resolveProcessingKitSize(order.selectedSize);
   const canvasLabel = selectedKit?.displayLabel || "";
+  const selectedStyleLabel = order.selectedStyle ? getStyleLabel(t, order.selectedStyle) : "-";
   const viewerPath = order.instructionCode ? buildViewerUrl(order.instructionCode, window.location.origin).replace(window.location.origin, "") : "";
   const sanitizedSavedDedication = useMemo(() => sanitizeDedicationText(order.dedicationText), [order.dedicationText]);
   const sanitizedDraftDedication = useMemo(() => sanitizeDedicationText(dedicationDraft), [dedicationDraft]);
@@ -281,7 +283,7 @@ const Download = () => {
                   <div className="p-5 md:p-6">
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge variant="secondary">{canvasLabel}</Badge>
-                      <Badge variant="outline">{order.selectedStyle}</Badge>
+                      <Badge variant="outline">{selectedStyleLabel}</Badge>
                       {activeManifest && <Badge variant="outline">{activeManifest.stats.totalSections} sections</Badge>}
                       {activeManifest && <Badge variant="outline">{activeManifest.stats.colorCount} colors</Badge>}
                       {hasDedication && (
@@ -633,4 +635,5 @@ const Download = () => {
 };
 
 export default Download;
+
 

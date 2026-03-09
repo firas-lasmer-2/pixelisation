@@ -1,4 +1,4 @@
-import { PaletteColor, COLOR_LETTERS } from "@/lib/palettes";
+import { PaletteColor, getColorLabel } from "@/lib/palettes";
 
 function hexToRgb(hex: string): [number, number, number] {
   return [
@@ -43,7 +43,7 @@ export function PalettePanel({ colors, sectionColorStats, highlightColor, onHigh
               className="w-5 h-5 rounded border border-border flex-shrink-0 shadow-sm"
               style={{ backgroundColor: `rgb(${r},${g},${b})` }}
             />
-            <span className="font-bold w-4 text-foreground">{COLOR_LETTERS[i]}</span>
+            <span className="font-bold w-4 text-foreground">{getColorLabel(i)}</span>
             <span className="text-muted-foreground truncate flex-1 text-left">{color.name}</span>
             {inSection && (
               <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -65,3 +65,4 @@ export function PalettePanel({ colors, sectionColorStats, highlightColor, onHigh
     </div>
   );
 }
+
