@@ -1,0 +1,320 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+
+@layer base {
+  :root {
+    --background: 37 53% 96%;
+    --foreground: 0 0% 17%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 17%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 17%;
+
+    --primary: 40 64% 55%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 37 30% 90%;
+    --secondary-foreground: 0 0% 17%;
+
+    --muted: 33 8% 88%;
+    --muted-foreground: 33 4% 53%;
+
+    --accent: 354 42% 32%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 33 15% 85%;
+    --input: 33 15% 85%;
+    --ring: 40 64% 55%;
+
+    --radius: 0.75rem;
+
+    --sidebar-background: 37 40% 97%;
+    --sidebar-foreground: 0 0% 17%;
+    --sidebar-primary: 40 64% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 37 30% 92%;
+    --sidebar-accent-foreground: 0 0% 17%;
+    --sidebar-border: 33 15% 88%;
+    --sidebar-ring: 40 64% 55%;
+  }
+
+  .dark {
+    --background: 30 15% 8%;
+    --foreground: 33 15% 95%;
+
+    --card: 30 12% 12%;
+    --card-foreground: 33 15% 95%;
+
+    --popover: 30 12% 12%;
+    --popover-foreground: 33 15% 95%;
+
+    --primary: 40 64% 55%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 30 12% 18%;
+    --secondary-foreground: 33 15% 95%;
+
+    --muted: 30 10% 16%;
+    --muted-foreground: 33 8% 55%;
+
+    --accent: 354 42% 40%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 30 12% 20%;
+    --input: 30 12% 20%;
+    --ring: 40 64% 55%;
+
+    --sidebar-background: 30 10% 10%;
+    --sidebar-foreground: 33 15% 95%;
+    --sidebar-primary: 40 64% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 30 10% 16%;
+    --sidebar-accent-foreground: 33 15% 95%;
+    --sidebar-border: 30 10% 16%;
+    --sidebar-ring: 40 64% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Playfair Display', serif;
+  }
+
+  /* RTL support */
+  [dir="rtl"] body {
+    font-family: 'Inter', 'Tajawal', sans-serif;
+  }
+}
+
+/* Smooth scroll */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Scroll reveal - elements start hidden, animate when .revealed is added */
+@layer utilities {
+  .scroll-reveal {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: opacity 0.7s ease-out, transform 0.7s ease-out;
+  }
+
+  .scroll-reveal.revealed {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .scroll-reveal-left {
+    opacity: 0;
+    transform: translateX(-30px);
+    transition: opacity 0.7s ease-out, transform 0.7s ease-out;
+  }
+
+  .scroll-reveal-left.revealed {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  .scroll-reveal-right {
+    opacity: 0;
+    transform: translateX(30px);
+    transition: opacity 0.7s ease-out, transform 0.7s ease-out;
+  }
+
+  .scroll-reveal-right.revealed {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  /* Shimmer button effect */
+  .shimmer-btn {
+    background-size: 200% 100%;
+    background-image: linear-gradient(
+      110deg,
+      transparent 25%,
+      hsl(var(--primary-foreground) / 0.15) 50%,
+      transparent 75%
+    );
+    animation: shimmer 2.5s linear infinite;
+  }
+
+  /* Glass morphism */
+  .glass-card {
+    background: hsl(var(--card) / 0.8);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  /* Border glow for selected items */
+  .border-glow {
+    box-shadow: 0 0 0 2px hsl(var(--primary)), 0 0 20px -5px hsl(var(--primary) / 0.4);
+  }
+
+  /* Step indicator pulse */
+  .step-active {
+    animation: step-pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes step-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 hsl(var(--primary) / 0.4); }
+    50% { box-shadow: 0 0 0 8px hsl(var(--primary) / 0); }
+  }
+
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+}
+
+/* Step transition animations */
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slide-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Confirmation page animations */
+@keyframes confetti-fall {
+  0% {
+    opacity: 1;
+    transform: translateY(0) rotate(0deg) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(300px) rotate(720deg) scale(0.3);
+  }
+}
+
+@keyframes draw-circle {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes draw-check {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Upload zone rotating gradient */
+@keyframes rotate-gradient {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.upload-zone-gradient {
+  background: linear-gradient(
+    270deg,
+    hsl(var(--primary) / 0.15),
+    hsl(var(--accent) / 0.1),
+    hsl(var(--primary) / 0.15)
+  );
+  background-size: 300% 300%;
+  animation: rotate-gradient 4s ease infinite;
+}
+
+/* ─── Studio Premium Styles ─── */
+
+/* Studio background pattern */
+.studio-bg {
+  background-image: 
+    radial-gradient(circle at 1px 1px, hsl(var(--primary) / 0.04) 1px, transparent 0);
+  background-size: 32px 32px;
+}
+
+/* Gold glow for selected cards */
+.gold-glow {
+  box-shadow: 
+    0 0 0 2px hsl(40 64% 55%),
+    0 0 24px -4px hsl(40 64% 55% / 0.35),
+    0 8px 32px -8px hsl(40 64% 55% / 0.2);
+}
+
+/* Step indicator gold ring pulse */
+@keyframes gold-ring-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 hsl(40 64% 55% / 0.4); }
+  50% { box-shadow: 0 0 0 8px hsl(40 64% 55% / 0); }
+}
+
+.step-gold-pulse {
+  animation: gold-ring-pulse 2s ease-in-out infinite;
+}
+
+/* Premium card accent strips */
+.card-accent-green { border-top: 3px solid hsl(142 60% 45%); }
+.card-accent-gold { border-top: 3px solid hsl(40 64% 55%); }
+.card-accent-burgundy { border-top: 3px solid hsl(354 42% 32%); }
+
+/* Savings badge */
+.savings-badge {
+  background: linear-gradient(135deg, hsl(142 60% 45%), hsl(142 60% 35%));
+  color: white;
+}
+
+/* Premium confirm button gradient */
+.btn-premium {
+  background: linear-gradient(135deg, hsl(40 64% 50%), hsl(40 64% 60%), hsl(40 64% 50%));
+  background-size: 200% 100%;
+  animation: shimmer 3s linear infinite;
+}
+
+/* Glass summary card */
+.glass-summary {
+  background: linear-gradient(145deg, hsl(var(--card) / 0.95), hsl(var(--primary) / 0.03));
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+/* Section gold underline */
+.section-gold-line {
+  position: relative;
+  padding-bottom: 0.5rem;
+}
+.section-gold-line::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 40px;
+  height: 2px;
+  background: hsl(var(--primary));
+  border-radius: 1px;
+}
