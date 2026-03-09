@@ -156,7 +156,7 @@ function buildAssetRows(params: {
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
-
+  if (req.method !== "POST") return json(405, { error: "Method not allowed" });
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -164,7 +164,21 @@ serve(async (req) => {
       return json(500, { error: "Supabase service role is not configured" });
     }
 
-    const payload = (await req.json()) as CreateOrderPayload;
+    const rawBody = await req.text();
+    if (!rawBody.trim()) {
+      return json(400, { error: "Request body is required" });
+    }
+
+    let payload: CreateOrderPayload;
+    try {
+      payload = JSON.parse(rawBody) as CreateOrderPayload;
+    } catch {
+      return json(400, { error: "Invalid JSON body" });
+    }
+
+    const sourcePhotos = Array.isArray(payload.photos)
+      ? payload.photos.filter((photo): photo is string => typeof photo === "string" && photo.length > 0)
+      : [];
     const sizePrice = PRICING[payload.selectedSize];
     const phone = normalizePhone(payload.contact?.phone || "");
 
@@ -178,6 +192,10 @@ serve(async (req) => {
 
     if (!payload.shipping?.address || !payload.shipping?.city || !payload.shipping?.governorate) {
       return json(400, { error: "Missing shipping details" });
+    }
+
+    if (sourcePhotos.length === 0 && !payload.aiGeneratedUrl) {
+      return json(400, { error: "Missing order images" });
     }
 
     const orderRef = createOrderRef();
@@ -215,8 +233,8 @@ serve(async (req) => {
     const orderId = created.order_id as string;
     const uploadedSourceUrls: string[] = [];
 
-    for (let index = 0; index < payload.photos.length; index++) {
-      const source = payload.photos[index];
+    for (let index = 0; index < sourcePhotos.length; index++) {
+      const source = sourcePhotos[index];
       if (!source) continue;
       const uploadedUrl = await uploadPhoto(supabase, source, `${orderRef}-source-${index + 1}-${Date.now()}.png`);
       uploadedSourceUrls.push(uploadedUrl);

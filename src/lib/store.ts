@@ -1,8 +1,9 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useRef, type ReactNode } from "react";
 import { Area } from "react-easy-crop";
 import React from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { KitSize as CatalogKitSize } from "@/lib/kitCatalog";
+import { isCreateOrderPayloadTooLarge, optimizeOrderImageSource } from "@/lib/orderImage";
 
 export type OrderCategory = "classic" | "family" | "kids_dream" | "pet";
 export type KitSize = CatalogKitSize;
@@ -103,6 +104,8 @@ const OrderContext = createContext<OrderContextType | null>(null);
 
 export function OrderProvider({ children }: { children: ReactNode }) {
   const [order, setOrder] = useState<OrderState>(initialState);
+  const orderRef = useRef(order);
+  orderRef.current = order;
 
   const setCategory = useCallback((category: OrderCategory) => setOrder((o) => ({
     ...o,
@@ -143,36 +146,52 @@ export function OrderProvider({ children }: { children: ReactNode }) {
     couponCode?: string | null;
     sessionId?: string | null;
   }) => {
+    const latest = orderRef.current;
     const snapshot = {
-      ...order,
+      ...latest,
       contact: input.contact,
       shipping: input.shipping,
       isGift: input.isGift,
       giftMessage: input.giftMessage,
-      dedicationText: input.dedicationText ?? order.dedicationText,
+      dedicationText: input.dedicationText ?? latest.dedicationText,
     };
 
     if (!snapshot.selectedSize || !snapshot.selectedStyle) {
       throw new Error("Order is missing size or style");
     }
 
+    const photos = (await Promise.all(
+      snapshot.photos
+        .filter(Boolean)
+        .map((photo) => optimizeOrderImageSource(photo))
+    )).filter(Boolean);
+    const aiGeneratedUrl = snapshot.aiGeneratedUrl
+      ? await optimizeOrderImageSource(snapshot.aiGeneratedUrl)
+      : undefined;
+
+    const requestBody = {
+      category: snapshot.category,
+      photos,
+      aiGeneratedUrl: aiGeneratedUrl || undefined,
+      generationRunId: snapshot.aiGenerationRunId || undefined,
+      selectedStyle: snapshot.selectedStyle,
+      selectedSize: snapshot.selectedSize,
+      contact: snapshot.contact,
+      shipping: snapshot.shipping,
+      isGift: snapshot.isGift,
+      giftMessage: snapshot.giftMessage,
+      dedicationText: snapshot.dedicationText || null,
+      dreamJob: snapshot.dreamJob || undefined,
+      couponCode: input.couponCode || null,
+      sessionId: input.sessionId || null,
+    };
+
+    if (isCreateOrderPayloadTooLarge(requestBody)) {
+      throw new Error("ORDER_PAYLOAD_TOO_LARGE");
+    }
+
     const { data, error } = await supabase.functions.invoke("create-order", {
-      body: {
-        category: snapshot.category,
-        photos: snapshot.photos,
-        aiGeneratedUrl: snapshot.aiGeneratedUrl || undefined,
-        generationRunId: snapshot.aiGenerationRunId || undefined,
-        selectedStyle: snapshot.selectedStyle,
-        selectedSize: snapshot.selectedSize,
-        contact: snapshot.contact,
-        shipping: snapshot.shipping,
-        isGift: snapshot.isGift,
-        giftMessage: snapshot.giftMessage,
-        dedicationText: snapshot.dedicationText || null,
-        dreamJob: snapshot.dreamJob || undefined,
-        couponCode: input.couponCode || null,
-        sessionId: input.sessionId || null,
-      },
+      body: requestBody,
     });
 
     if (error) {
@@ -207,7 +226,7 @@ export function OrderProvider({ children }: { children: ReactNode }) {
     }));
 
     return result;
-  }, [order]);
+  }, []);
 
   const resetOrder = useCallback(() => setOrder(initialState), []);
 

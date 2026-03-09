@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { Upload, User, Heart, Camera, Info, ImageIcon, Sparkles } from "lucide-react";
 import { useTranslation } from "@/i18n";
+import { optimizeOrderImageSource } from "@/lib/orderImage";
 
 interface UploadZoneProps {
   onImageSelected: (dataUrl: string) => void;
@@ -17,13 +18,10 @@ export function UploadZone({ onImageSelected }: UploadZoneProps) {
   const { t } = useTranslation();
 
   const handleFile = useCallback(
-    (file: File) => {
+    async (file: File) => {
       if (!file.type.startsWith("image/")) return;
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        onImageSelected(e.target?.result as string);
-      };
-      reader.readAsDataURL(file);
+      const optimized = await optimizeOrderImageSource(file);
+      onImageSelected(optimized);
     },
     [onImageSelected]
   );
@@ -33,7 +31,7 @@ export function UploadZone({ onImageSelected }: UploadZoneProps) {
       e.preventDefault();
       setIsDragging(false);
       const file = e.dataTransfer.files[0];
-      if (file) handleFile(file);
+      if (file) void handleFile(file);
     },
     [handleFile]
   );
@@ -42,11 +40,8 @@ export function UploadZone({ onImageSelected }: UploadZoneProps) {
     try {
       const resp = await fetch(url);
       const blob = await resp.blob();
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        onImageSelected(e.target?.result as string);
-      };
-      reader.readAsDataURL(blob);
+      const optimized = await optimizeOrderImageSource(blob);
+      onImageSelected(optimized);
     } catch {
       // If fetch fails, just use the URL directly as a data source
       onImageSelected(url);
@@ -92,7 +87,7 @@ export function UploadZone({ onImageSelected }: UploadZoneProps) {
           className="sr-only"
           onChange={(e) => {
             const file = e.target.files?.[0];
-            if (file) handleFile(file);
+            if (file) void handleFile(file);
           }}
         />
         

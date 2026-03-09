@@ -160,7 +160,7 @@ export const KIT_CATALOG: Record<KitSize, KitCatalogEntry> = {
     chooserNote: "Le meilleur point de départ si vous voulez plus de détail qu'un A4 sans passer tout de suite aux grands formats.",
     featureBullets: [
       "Format papier standard facile à encadrer.",
-      "Résolution proche d'un 30×40 dans un format plus compact.",
+      "Le meilleur équilibre entre qualité nette et démarrage facile.",
       "Le meilleur nouveau point d'entrée pour une qualité nette.",
     ],
     tone: "gold",
@@ -204,7 +204,7 @@ export const KIT_CATALOG: Record<KitSize, KitCatalogEntry> = {
       label: "Équilibré",
       icon: "star",
     },
-    publicVisible: true,
+    publicVisible: false,
     legacyOnly: false,
     recommended: false,
   },
@@ -240,7 +240,7 @@ export const KIT_CATALOG: Record<KitSize, KitCatalogEntry> = {
       label: "Populaire",
       icon: "star",
     },
-    publicVisible: true,
+    publicVisible: false,
     legacyOnly: false,
     recommended: false,
   },
@@ -286,8 +286,6 @@ export const DEFAULT_PUBLIC_KIT: KitSize = "stamp_kit_A3";
 
 export const PUBLIC_KIT_ORDER = [
   "stamp_kit_A3",
-  "stamp_kit_30x40",
-  "stamp_kit_40x50",
   "stamp_kit_A2",
 ] as const satisfies readonly KitSize[];
 
@@ -414,3 +412,7 @@ export function getKitComparisonStats(size: KitSize) {
 export const MAX_KIT_DIFFICULTY = Math.max(
   ...Object.values(KIT_CATALOG).map((kit) => kit.difficultyLevel),
 );
+
+
+
+

@@ -1,5 +1,6 @@
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import { Upload, X, ImageIcon } from "lucide-react";
+import { optimizeOrderImageSource } from "@/lib/orderImage";
 
 interface MultiUploadZoneProps {
   photos: string[];
@@ -10,13 +11,10 @@ interface MultiUploadZoneProps {
 }
 
 export function MultiUploadZone({ photos, maxPhotos, onPhotoAdded, onPhotoRemoved, labels }: MultiUploadZoneProps) {
-  const handleFile = useCallback((file: File, index: number) => {
+  const handleFile = useCallback(async (file: File, index: number) => {
     if (!file.type.startsWith("image/")) return;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      onPhotoAdded(e.target?.result as string, index);
-    };
-    reader.readAsDataURL(file);
+    const optimized = await optimizeOrderImageSource(file);
+    onPhotoAdded(optimized, index);
   }, [onPhotoAdded]);
 
   return (
@@ -48,7 +46,7 @@ export function MultiUploadZone({ photos, maxPhotos, onPhotoAdded, onPhotoRemove
                   className="sr-only"
                   onChange={(e) => {
                     const file = e.target.files?.[0];
-                    if (file) handleFile(file, i);
+                    if (file) void handleFile(file, i);
                   }}
                 />
                 <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-2 group-hover:bg-primary/15 transition-colors">
