@@ -55,14 +55,14 @@ export function SizeComparison() {
             Formats
           </Badge>
           <h2 className="font-serif text-3xl font-bold tracking-tight text-foreground md:text-5xl">
-            Deux formats, même qualité
+            Trois formats, même qualité
           </h2>
-          <p className="mx-auto mt-4 max-w-xl text-base text-muted-foreground">
-            A3 pour commencer ou offrir, A2 pour un rendu mural ambitieux.
+          <p className="mx-auto mt-4 max-w-2xl text-base text-muted-foreground">
+            30×40 pour démarrer sereinement, 40×50 pour l'équilibre parfait, 40×60 pour une vraie pièce murale signature.
           </p>
         </div>
 
-        <div className="mx-auto grid max-w-4xl gap-5 md:grid-cols-2">
+        <div className="mx-auto grid max-w-6xl gap-5 lg:grid-cols-3">
           {SIZES.map((size) => {
             const BadgeIcon = size.badge ? BADGE_ICONS[size.badge.icon] : null;
             const stats = size.stats;
@@ -74,7 +74,6 @@ export function SizeComparison() {
                   size.isDefault ? "border-primary/30" : "border-border/60"
                 }`}
               >
-                {/* Badge */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
                     <span className="font-serif text-3xl font-bold text-foreground">{size.shortLabel}</span>
@@ -90,7 +89,6 @@ export function SizeComparison() {
                 <p className="mt-1 text-sm text-muted-foreground">{size.dimensionsLabel}</p>
                 <p className="mt-3 text-sm leading-relaxed text-foreground/80">{size.summary}</p>
 
-                {/* Key specs */}
                 <div className="mt-5 grid grid-cols-2 gap-3">
                   {[
                     { label: "Cellules", value: stats.totalCells.toLocaleString("fr-FR") },
@@ -105,14 +103,12 @@ export function SizeComparison() {
                   ))}
                 </div>
 
-                {/* Difficulty */}
                 <div className="mt-4 flex items-center gap-3">
                   <span className="text-xs text-muted-foreground">Difficulté</span>
                   <DifficultyDots level={size.difficultyLevel} />
                   <span className="text-xs font-medium text-foreground">{size.displayDifficultyLabel}</span>
                 </div>
 
-                {/* Price + CTA */}
                 <div className="mt-6 flex items-end justify-between border-t border-border/50 pt-5">
                   <div>
                     <div className="flex items-baseline gap-2">

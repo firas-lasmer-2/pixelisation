@@ -5,7 +5,7 @@ import { resolvePaletteForProcessing } from "@/lib/palettes";
 
 describe("StylePreviewCard", () => {
   it("shows the exact color count badge for a processed style", () => {
-    const palette = resolvePaletteForProcessing("original", "A3");
+    const palette = resolvePaletteForProcessing("original", "30x40");
 
     render(
       <StylePreviewCard

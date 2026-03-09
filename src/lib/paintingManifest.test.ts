@@ -1,45 +1,78 @@
-import { describe, expect, it } from "vitest";
-import { normalizePaintingManifest, resolveManifestPalette } from "@/lib/paintingManifest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  getPaintingManifestStorageKey,
+  loadPaintingManifestLocally,
+  normalizePaintingManifest,
+  persistPaintingManifestLocally,
+  resolveManifestPalette,
+  type PaintingManifest,
+} from "@/lib/paintingManifest";
 import { resolveLegacyPalette, resolvePaletteForProcessing } from "@/lib/palettes";
 
+vi.mock("@/lib/imageProcessing", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/imageProcessing")>("@/lib/imageProcessing");
+
+  return {
+    ...actual,
+    renderSmoothPreview: () => ({
+      toDataURL: () => "data:image/jpeg;base64,GENERATED",
+    } as HTMLCanvasElement),
+  };
+});
+
+function createManifest(overrides: Partial<PaintingManifest> = {}): PaintingManifest {
+  const paletteSnapshot = resolvePaletteForProcessing("watercolor", "30x40");
+
+  return {
+    version: 4,
+    orderRef: "HL-TEST",
+    instructionCode: "ABC123",
+    category: "classic",
+    kitSize: "stamp_kit_30x40",
+    canvasLabel: "30 x 40 cm",
+    artStyle: "watercolor",
+    paletteKey: "watercolor",
+    styleProfileKey: "watercolor",
+    styleProfileVersion: 1,
+    paletteSnapshot,
+    createdAt: "2026-03-09T00:00:00.000Z",
+    dedicationText: null,
+    dedication: null,
+    sourceImageUrl: null,
+    referenceImageUrl: "data:image/png;base64,AAAA",
+    previewDataUrl: "data:image/png;base64,AAAA",
+    viewerUrl: "/viewer/ABC123",
+    gridCols: 2,
+    gridRows: 2,
+    indices: [0, 1, 2, 3],
+    stats: {
+      totalCells: 4,
+      totalSections: 1,
+      totalPages: 1,
+      sectionCols: 1,
+      sectionRows: 1,
+      totalGridPages: 1,
+      colorCount: paletteSnapshot.colors.length,
+      estimatedHours: "8-20 h",
+      difficultyLabel: "Intermediaire",
+      difficultyLevel: 2,
+    },
+    ...overrides,
+  };
+}
+
 describe("paintingManifest", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+    vi.restoreAllMocks();
+  });
+
   it("preserves version 4 palette snapshots during normalization", () => {
-    const paletteSnapshot = resolvePaletteForProcessing("watercolor", "A3");
-    const manifest = normalizePaintingManifest({
-      version: 4,
-      orderRef: "HL-TEST",
-      instructionCode: "ABC123",
-      category: "classic",
-      kitSize: "stamp_kit_A3",
-      canvasLabel: "A3",
-      artStyle: "watercolor",
-      paletteKey: "watercolor",
-      styleProfileKey: "watercolor",
-      styleProfileVersion: 1,
+    const paletteSnapshot = resolvePaletteForProcessing("watercolor", "30x40");
+    const manifest = normalizePaintingManifest(createManifest({
       paletteSnapshot,
-      createdAt: "2026-03-09T00:00:00.000Z",
-      dedicationText: null,
-      dedication: null,
-      sourceImageUrl: null,
-      referenceImageUrl: "data:image/png;base64,AAAA",
-      previewDataUrl: "data:image/png;base64,AAAA",
-      viewerUrl: "/viewer/ABC123",
-      gridCols: 2,
-      gridRows: 2,
-      indices: [0, 1, 2, 3],
-      stats: {
-        totalCells: 4,
-        totalSections: 1,
-        totalPages: 1,
-        sectionCols: 1,
-        sectionRows: 1,
-        totalGridPages: 1,
-        colorCount: paletteSnapshot.colors.length,
-        estimatedHours: "8-20 h",
-        difficultyLabel: "Intermediaire",
-        difficultyLevel: 2,
-      },
-    }, "ABC123");
+    }), "ABC123");
 
     expect(manifest?.version).toBe(4);
     expect(resolveManifestPalette(manifest!).colors).toHaveLength(10);
@@ -52,8 +85,8 @@ describe("paintingManifest", () => {
       orderRef: "HL-OLD",
       instructionCode: "OLD123",
       category: "classic",
-      kitSize: "stamp_kit_A3",
-      canvasLabel: "A3",
+      kitSize: "stamp_kit_30x40",
+      canvasLabel: "30 x 40 cm",
       paletteKey: "popart",
       createdAt: "2026-03-09T00:00:00.000Z",
       dedicationText: null,
@@ -83,5 +116,48 @@ describe("paintingManifest", () => {
     expect(manifest?.artStyle).toBe("pop_art");
     expect(manifest?.paletteSnapshot.colors).toHaveLength(resolveLegacyPalette("pop_art").colors.length);
     expect(manifest?.stats.colorCount).toBe(8);
+  });
+
+  it("stores compact cached manifests and reconstructs inline previews on load", () => {
+    const manifest = createManifest({
+      sourceImageUrl: "data:image/jpeg;base64,SOURCE",
+      referenceImageUrl: "data:image/jpeg;base64,REFERENCE",
+      previewDataUrl: "data:image/jpeg;base64,PREVIEW",
+    });
+
+    persistPaintingManifestLocally(manifest);
+
+    const stored = localStorage.getItem(getPaintingManifestStorageKey(manifest.instructionCode));
+    expect(stored).toBeTruthy();
+
+    const parsed = JSON.parse(stored!);
+    expect(parsed.referenceImageUrl).toBeUndefined();
+    expect(parsed.previewDataUrl).toBeUndefined();
+    expect(parsed.sourceImageUrl).toBeNull();
+
+    const loaded = loadPaintingManifestLocally(manifest.instructionCode);
+    expect(loaded?.referenceImageUrl).toMatch(/^data:image\/jpeg;base64,/);
+    expect(loaded?.previewDataUrl).toBe(loaded?.referenceImageUrl);
+    expect(loaded?.sourceImageUrl).toBeNull();
+  });
+
+  it("falls back to session storage when local storage is full", () => {
+    const originalSetItem = Storage.prototype.setItem;
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (this: Storage, key: string, value: string) {
+      if (this === localStorage) {
+        throw new DOMException("Quota exceeded", "QuotaExceededError");
+      }
+
+      return originalSetItem.call(this, key, value);
+    });
+
+    const manifest = createManifest();
+    const cacheKey = getPaintingManifestStorageKey(manifest.instructionCode);
+
+    persistPaintingManifestLocally(manifest);
+
+    expect(localStorage.getItem(cacheKey)).toBeNull();
+    expect(sessionStorage.getItem(cacheKey)).toBeTruthy();
+    expect(loadPaintingManifestLocally(manifest.instructionCode)?.instructionCode).toBe(manifest.instructionCode);
   });
 });

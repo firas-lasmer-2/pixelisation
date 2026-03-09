@@ -3,6 +3,7 @@ import { getPaintingStats } from "@/lib/paintingLayout";
 export const KIT_IDS = [
   "stamp_kit_40x50",
   "stamp_kit_30x40",
+  "stamp_kit_40x60",
   "stamp_kit_A4",
   "stamp_kit_A3",
   "stamp_kit_A2",
@@ -10,7 +11,7 @@ export const KIT_IDS = [
 
 export type KitSize = (typeof KIT_IDS)[number];
 
-export const PROCESSING_KIT_IDS = ["40x50", "30x40", "A4", "A3", "A2"] as const;
+export const PROCESSING_KIT_IDS = ["40x50", "30x40", "40x60", "A4", "A3", "A2"] as const;
 export type ProcessingKitSize = (typeof PROCESSING_KIT_IDS)[number];
 
 export type KitTone = "emerald" | "gold" | "accent" | "purple";
@@ -118,10 +119,10 @@ export const KIT_CATALOG: Record<KitSize, KitCatalogEntry> = {
     difficultyLevel: 1,
     displayDifficultyLabel: "Débutant",
     manifestDifficultyLabel: "Debutant",
-    headline: "Rapide, doux, accessible",
-    summary: "Ancien petit format Helma. Il reste compatible pour les anciennes commandes, mais n'est plus proposé dans les nouveaux parcours.",
-    idealFor: "une commande legacy déjà commencée",
-    chooserNote: "Ancien petit format conservé uniquement pour les commandes existantes.",
+    headline: "Format legacy compact",
+    summary: "Ancien petit format Helma. Il reste compatible pour les commandes déjà créées, mais n'est plus proposé dans la nouvelle gamme toile.",
+    idealFor: "une ancienne commande à relancer",
+    chooserNote: "Conservé uniquement pour la compatibilité legacy.",
     featureBullets: [
       "Toujours pris en charge pour les anciens paniers et manifests.",
       "Compatible avec le PDF, le viewer et les commandes déjà confirmées.",
@@ -154,23 +155,23 @@ export const KIT_CATALOG: Record<KitSize, KitCatalogEntry> = {
     difficultyLevel: 2,
     displayDifficultyLabel: "Intermédiaire",
     manifestDifficultyLabel: "Intermediaire",
-    headline: "Le nouveau standard recommandé",
-    summary: "Le plus petit format public qui garde déjà un vrai niveau de netteté. C'est désormais le point d'entrée Helma recommandé.",
-    idealFor: "la plupart des portraits, cadeaux et premières commandes sérieuses",
-    chooserNote: "Le meilleur point de départ si vous voulez plus de détail qu'un A4 sans passer tout de suite aux grands formats.",
+    headline: "Format legacy intermédiaire",
+    summary: "Ancien format moyen Helma, conservé pour les commandes créées avant la nouvelle gamme 30 × 40 / 40 × 50 / 40 × 60.",
+    idealFor: "une commande restaurée ou un ancien panier",
+    chooserNote: "Format legacy conservé uniquement pour compatibilité.",
     featureBullets: [
-      "Format papier standard facile à encadrer.",
-      "Le meilleur équilibre entre qualité nette et démarrage facile.",
-      "Le meilleur nouveau point d'entrée pour une qualité nette.",
+      "Reste compatible avec les anciens paniers et liens de viewer.",
+      "Toujours généré correctement dans le PDF et le viewer.",
+      "Retiré de la sélection publique au profit des formats toile standard.",
     ],
     tone: "gold",
     badge: {
-      label: "Recommandé",
+      label: "Legacy",
       icon: "sparkles",
     },
-    publicVisible: true,
-    legacyOnly: false,
-    recommended: true,
+    publicVisible: false,
+    legacyOnly: true,
+    recommended: false,
   },
   stamp_kit_30x40: {
     id: "stamp_kit_30x40",
@@ -185,28 +186,28 @@ export const KIT_CATALOG: Record<KitSize, KitCatalogEntry> = {
     originalPrice: 429,
     gridCols: 120,
     gridRows: 160,
-    colorsLabel: "12-15",
-    hoursLabel: "8-20 h",
+    colorsLabel: "10-12",
+    hoursLabel: "8-18 h",
     difficultyLevel: 2,
     displayDifficultyLabel: "Intermédiaire",
     manifestDifficultyLabel: "Intermediaire",
-    headline: "Notre format équilibré",
-    summary: "Le format Helma le plus polyvalent. Très bon compromis entre présence au mur, niveau de détail et temps de peinture.",
-    idealFor: "les portraits classiques, couples et cadeaux polyvalents",
-    chooserNote: "Le format le plus équilibré entre présence au mur, niveau de détail et temps de peinture.",
+    headline: "Le nouveau point de départ",
+    summary: "Le format d'entrée recommandé pour Helma. Suffisamment détaillé pour un beau portrait, mais encore très confortable à peindre et à offrir.",
+    idealFor: "une première commande, un cadeau ou un portrait solo équilibré",
+    chooserNote: "Le meilleur point de départ pour lancer la nouvelle gamme toile avec un vrai niveau de détail.",
     featureBullets: [
-      "Très bon équilibre entre taille et confort de peinture.",
-      "Rendu mural plus marqué qu'un A3.",
-      "Excellent choix si vous hésitez entre raisonnable et impressionnant.",
+      "Format toile standard facile à produire et à encadrer.",
+      "Assez détaillé pour un rendu propre sans allonger excessivement le temps de peinture.",
+      "Le meilleur choix pour une première commande Helma en Tunisie.",
     ],
     tone: "gold",
     badge: {
-      label: "Équilibré",
-      icon: "star",
+      label: "Recommandé",
+      icon: "sparkles",
     },
-    publicVisible: false,
+    publicVisible: true,
     legacyOnly: false,
-    recommended: false,
+    recommended: true,
   },
   stamp_kit_40x50: {
     id: "stamp_kit_40x50",
@@ -222,25 +223,61 @@ export const KIT_CATALOG: Record<KitSize, KitCatalogEntry> = {
     gridCols: 160,
     gridRows: 200,
     colorsLabel: "12-15",
-    hoursLabel: "15-30 h",
+    hoursLabel: "14-28 h",
     difficultyLevel: 3,
     displayDifficultyLabel: "Avancé",
     manifestDifficultyLabel: "Avance",
-    headline: "Pièce maîtresse",
-    summary: "Le grand format premium pour un rendu plus immersif, plus détaillé et plus spectaculaire une fois terminé.",
-    idealFor: "un souvenir fort, un salon ou un cadeau signature",
-    chooserNote: "Plus immersif, plus spectaculaire, plus long. À choisir si vous voulez un vrai résultat signature.",
+    headline: "Le meilleur équilibre",
+    summary: "Notre format signature pour la plupart des clients. Plus de présence murale et plus de finesse, sans devenir un projet trop long ou trop exigeant.",
+    idealFor: "les couples, portraits forts et cadeaux premium polyvalents",
+    chooserNote: "Le meilleur équilibre entre impact visuel, niveau de détail et confort de production.",
     featureBullets: [
-      "Plus d'espace pour les détails et les transitions.",
-      "Impact visuel supérieur une fois accroché.",
-      "Le format premium si vous cherchez l'effet waouh.",
+      "Format le plus convaincant pour la majorité des commandes premium.",
+      "Plus d'espace pour les détails du visage, des vêtements et du fond.",
+      "Le format à pousser si vous voulez un rendu plus impressionnant au mur.",
     ],
-    tone: "accent",
+    tone: "emerald",
     badge: {
       label: "Populaire",
       icon: "star",
     },
-    publicVisible: false,
+    publicVisible: true,
+    legacyOnly: false,
+    recommended: false,
+  },
+  stamp_kit_40x60: {
+    id: "stamp_kit_40x60",
+    processingKey: "40x60",
+    shortLabel: "40×60",
+    displayLabel: "40 × 60 cm",
+    manifestLabel: "40 x 60 cm",
+    dimensionsLabel: "40 × 60 cm",
+    widthCm: 40,
+    heightCm: 60,
+    price: 499,
+    originalPrice: 629,
+    gridCols: 160,
+    gridRows: 240,
+    colorsLabel: "12-16",
+    hoursLabel: "18-36 h",
+    difficultyLevel: 4,
+    displayDifficultyLabel: "Expert",
+    manifestDifficultyLabel: "Expert",
+    headline: "Le grand format signature",
+    summary: "Le grand format pour une vraie pièce murale. Plus immersif, plus détaillé et plus valorisant une fois terminé, avec un rendu premium pour les salons et grands cadeaux.",
+    idealFor: "une pièce de salon, un cadeau marquant ou une commande haut de gamme",
+    chooserNote: "Le grand format à choisir si vous voulez une présence murale forte et un résultat plus spectaculaire.",
+    featureBullets: [
+      "Grand format portrait cohérent avec la production toile locale.",
+      "Niveau de détail élevé grâce à une grille 160 × 240 plus ambitieuse.",
+      "Le meilleur choix pour une version premium clairement différenciée.",
+    ],
+    tone: "accent",
+    badge: {
+      label: "Grand format",
+      icon: "crown",
+    },
+    publicVisible: true,
     legacyOnly: false,
     recommended: false,
   },
@@ -262,31 +299,32 @@ export const KIT_CATALOG: Record<KitSize, KitCatalogEntry> = {
     difficultyLevel: 4,
     displayDifficultyLabel: "Expert",
     manifestDifficultyLabel: "Expert",
-    headline: "Format monumental",
-    summary: "Le plus grand format disponible, pour une pièce murale ambitieuse qui pousse le niveau de détail et la présence visuelle au maximum.",
-    idealFor: "une pièce de salon, un cadeau exceptionnel ou un projet ambitieux",
-    chooserNote: "Grand format expert pour un rendu monumental et un projet plus exigeant.",
+    headline: "Format legacy monumental",
+    summary: "Ancien très grand format Helma, conservé pour les anciennes commandes et les manifests déjà générés avant le passage au 40 × 60.",
+    idealFor: "une ancienne commande premium à finaliser",
+    chooserNote: "Format legacy conservé uniquement pour compatibilité des anciennes commandes.",
     featureBullets: [
-      "Niveau de détail maximal de la gamme.",
-      "Très forte présence murale une fois encadré.",
-      "Pensé pour les clients qui veulent un vrai grand projet.",
+      "Toujours compatible avec les manifests et liens déjà envoyés.",
+      "Reste lisible dans le viewer et le PDF pour les anciennes commandes.",
+      "Remplacé dans la gamme publique par le 40 × 60 plus cohérent à produire.",
     ],
     tone: "purple",
     badge: {
-      label: "Expert",
+      label: "Legacy",
       icon: "crown",
     },
-    publicVisible: true,
-    legacyOnly: false,
+    publicVisible: false,
+    legacyOnly: true,
     recommended: false,
   },
 };
 
-export const DEFAULT_PUBLIC_KIT: KitSize = "stamp_kit_A3";
+export const DEFAULT_PUBLIC_KIT: KitSize = "stamp_kit_30x40";
 
 export const PUBLIC_KIT_ORDER = [
-  "stamp_kit_A3",
-  "stamp_kit_A2",
+  "stamp_kit_30x40",
+  "stamp_kit_40x50",
+  "stamp_kit_40x60",
 ] as const satisfies readonly KitSize[];
 
 export const ALL_KIT_ORDER = [
@@ -294,12 +332,14 @@ export const ALL_KIT_ORDER = [
   "stamp_kit_A3",
   "stamp_kit_30x40",
   "stamp_kit_40x50",
+  "stamp_kit_40x60",
   "stamp_kit_A2",
 ] as const satisfies readonly KitSize[];
 
 export const PROCESSING_GRID_CONFIG: Record<ProcessingKitSize, { cols: number; rows: number }> = {
   "40x50": { cols: 160, rows: 200 },
   "30x40": { cols: 120, rows: 160 },
+  "40x60": { cols: 160, rows: 240 },
   A4: { cols: 84, rows: 119 },
   A3: { cols: 118, rows: 168 },
   A2: { cols: 168, rows: 237 },
@@ -412,11 +452,3 @@ export function getKitComparisonStats(size: KitSize) {
 export const MAX_KIT_DIFFICULTY = Math.max(
   ...Object.values(KIT_CATALOG).map((kit) => kit.difficultyLevel),
 );
-
-
-
-
-
-
-
-

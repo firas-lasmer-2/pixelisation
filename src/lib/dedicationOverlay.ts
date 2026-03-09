@@ -9,6 +9,7 @@ const MASK_SCALE = 12;
 const BOX_SPECS: Record<KitSize, { width: number; height: number }> = {
   stamp_kit_40x50: { width: 48, height: 14 },
   stamp_kit_30x40: { width: 40, height: 12 },
+  stamp_kit_40x60: { width: 52, height: 14 },
   stamp_kit_A4: { width: 32, height: 10 },
   stamp_kit_A3: { width: 40, height: 12 },
   stamp_kit_A2: { width: 52, height: 14 },

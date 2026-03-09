@@ -764,7 +764,7 @@ const Studio = () => {
                     <div className="rounded-2xl border border-green-200 bg-green-50/70 px-5 py-4">
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <p className="text-sm text-foreground/80">
-                          Session restaurée avec <span className="font-semibold">{hiddenSelectedKit.displayLabel}</span>. Vous pouvez basculer vers A3 ou A2.
+                          Session restaurée avec <span className="font-semibold">{hiddenSelectedKit.displayLabel}</span>. Vous pouvez basculer vers 30×40, 40×50 ou 40×60.
                         </p>
                         <Button variant="outline" size="sm" onClick={() => setSize(DEFAULT_PUBLIC_KIT)} className="rounded-full border-green-300 text-green-700 hover:bg-green-100">
                           Passer en {getKitConfig(DEFAULT_PUBLIC_KIT).shortLabel}
@@ -813,7 +813,7 @@ const Studio = () => {
                   </div>
 
                   {/* ── Kit cards ── */}
-                  <div className="grid gap-4 lg:grid-cols-2">
+                  <div className="grid gap-4 lg:grid-cols-3">
                     {PUBLIC_STUDIO_KITS.map((kit) => {
                       const isSelected = order.selectedSize === kit.id;
                       const toneStyles = KIT_TONE_STYLES[kit.tone];

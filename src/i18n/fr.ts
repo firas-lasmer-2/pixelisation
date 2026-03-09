@@ -224,6 +224,7 @@ export const fr = {
       freeShipping: "Livraison gratuite",
       size40x50: "40 × 50 cm",
       size30x40: "30 × 40 cm",
+      size40x60: "40 × 60 cm",
       popular: "Populaire",
       bestValue: "Meilleur rapport qualité/prix",
     },

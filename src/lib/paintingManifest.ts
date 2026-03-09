@@ -35,6 +35,11 @@ type RawManifest = Partial<PaintingManifest> & {
 };
 
 type ManifestBase = Omit<PaintingManifest, "version" | "dedication" | "referenceImageUrl" | "previewDataUrl">;
+type StoredPaintingManifest = Omit<PaintingManifest, "referenceImageUrl" | "previewDataUrl" | "sourceImageUrl"> & {
+  referenceImageUrl?: string | null;
+  previewDataUrl?: string | null;
+  sourceImageUrl?: string | null;
+};
 
 export interface PaintingManifest {
   version: 4;
@@ -75,12 +80,12 @@ export interface PaintingManifest {
 function inferKitSize(gridCols: number, gridRows: number): KitSize {
   if (gridCols === 160 && gridRows === 200) return "stamp_kit_40x50";
   if (gridCols === 120 && gridRows === 160) return "stamp_kit_30x40";
+  if (gridCols === 160 && gridRows === 240) return "stamp_kit_40x60";
   if (gridCols === 84 && gridRows === 119) return "stamp_kit_A4";
   if (gridCols === 118 && gridRows === 168) return "stamp_kit_A3";
   if (gridCols === 168 && gridRows === 237) return "stamp_kit_A2";
   return DEFAULT_PUBLIC_KIT;
 }
-
 function resolveStyleProfileVersion(style: ArtStyle, version?: number | null) {
   if (typeof version === "number" && Number.isFinite(version)) return version;
   return getStyleDefinition(style).profileVersion;
@@ -219,8 +224,80 @@ export function getViewerProgressStorageKey(instructionCode: string) {
   return `${STORAGE_KEYS.progressPrefix}${instructionCode.toUpperCase()}`;
 }
 
+function isInlineDataUrl(value: string | null | undefined) {
+  return typeof value === "string" && value.startsWith("data:");
+}
+
+function toStoredPaintingManifest(manifest: PaintingManifest): StoredPaintingManifest {
+  const {
+    referenceImageUrl,
+    previewDataUrl,
+    sourceImageUrl,
+    ...manifestBase
+  } = manifest;
+
+  return {
+    ...manifestBase,
+    sourceImageUrl: isInlineDataUrl(sourceImageUrl) ? null : sourceImageUrl,
+    ...(isInlineDataUrl(referenceImageUrl) ? {} : { referenceImageUrl }),
+    ...(isInlineDataUrl(previewDataUrl) ? {} : { previewDataUrl }),
+  };
+}
+
+function getManifestCacheStorages(): Storage[] {
+  if (typeof window === "undefined") return [];
+  return [window.localStorage, window.sessionStorage];
+}
+
+function tryWriteManifestToStorage(storage: Storage, key: string, value: string) {
+  try {
+    storage.setItem(key, value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function tryReadManifestFromStorage(storage: Storage, key: string, instructionCode: string) {
+  try {
+    const stored = storage.getItem(key);
+    if (!stored) return null;
+    return normalizePaintingManifest(JSON.parse(stored), instructionCode);
+  } catch {
+    return null;
+  }
+}
+
+function tryRemoveManifestFromStorage(storage: Storage, key: string) {
+  try {
+    storage.removeItem(key);
+  } catch {
+    // Ignore cache cleanup failures.
+  }
+}
+
 export function persistPaintingManifestLocally(manifest: PaintingManifest) {
-  localStorage.setItem(getPaintingManifestStorageKey(manifest.instructionCode), JSON.stringify(manifest));
+  const storages = getManifestCacheStorages();
+  if (storages.length === 0) return;
+
+  const [localStorageCache, sessionStorageCache] = storages;
+  const cacheKey = getPaintingManifestStorageKey(manifest.instructionCode);
+  const serializedManifest = JSON.stringify(toStoredPaintingManifest(manifest));
+
+  if (localStorageCache && tryWriteManifestToStorage(localStorageCache, cacheKey, serializedManifest)) {
+    if (sessionStorageCache) {
+      tryRemoveManifestFromStorage(sessionStorageCache, cacheKey);
+    }
+    return;
+  }
+
+  if (sessionStorageCache && tryWriteManifestToStorage(sessionStorageCache, cacheKey, serializedManifest)) {
+    return;
+  }
+
+  console.warn("Unable to cache painting manifest locally", {
+    instructionCode: manifest.instructionCode,
+  });
 }
 
 export function normalizePaintingManifest(raw: unknown, instructionCode: string) {
@@ -299,13 +376,16 @@ export function normalizePaintingManifest(raw: unknown, instructionCode: string)
 }
 
 export function loadPaintingManifestLocally(instructionCode: string) {
-  try {
-    const stored = localStorage.getItem(getPaintingManifestStorageKey(instructionCode));
-    if (!stored) return null;
-    return normalizePaintingManifest(JSON.parse(stored), instructionCode);
-  } catch {
-    return null;
+  const cacheKey = getPaintingManifestStorageKey(instructionCode);
+
+  for (const storage of getManifestCacheStorages()) {
+    const manifest = tryReadManifestFromStorage(storage, cacheKey, instructionCode);
+    if (manifest) {
+      return manifest;
+    }
   }
+
+  return null;
 }
 
 export function buildPaintingManifest(input: {

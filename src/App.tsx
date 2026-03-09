@@ -25,6 +25,10 @@ import { AdminLayout } from "./components/admin/AdminLayout";
 import { WhatsAppButton } from "./components/shared/WhatsAppButton";
 
 const queryClient = new QueryClient();
+const routerFutureFlags = {
+  v7_startTransition: true,
+  v7_relativeSplatPath: true,
+} as const;
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -33,7 +37,7 @@ const App = () => (
         <TooltipProvider>
           <Toaster />
           <Sonner />
-          <BrowserRouter>
+          <BrowserRouter future={routerFutureFlags}>
             <WhatsAppButton />
             <Routes>
               <Route path="/" element={<Landing />} />

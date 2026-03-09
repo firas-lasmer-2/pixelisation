@@ -6,6 +6,7 @@ import { sendStatusEmail } from "../_shared/mail.ts";
 const PRICING: Record<string, number> = {
   stamp_kit_40x50: 449,
   stamp_kit_30x40: 349,
+  stamp_kit_40x60: 499,
   stamp_kit_A4: 249,
   stamp_kit_A3: 299,
   stamp_kit_A2: 399,

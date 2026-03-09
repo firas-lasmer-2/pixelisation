@@ -226,6 +226,7 @@ export const ar: Translations = {
       freeShipping: "توصيل مجاني",
       size40x50: "40 × 50 سم",
       size30x40: "30 × 40 سم",
+      size40x60: "40 × 60 سم",
       popular: "الأكثر طلباً",
       bestValue: "أفضل قيمة مقابل السعر",
     },

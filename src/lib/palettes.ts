@@ -20,7 +20,7 @@ export interface StylePalette {
   colors: PaletteColor[];
 }
 
-type PaletteTier = "legacy" | "public_a3" | "public_a2";
+type PaletteTier = "legacy" | "public_standard" | "public_premium";
 
 const COLOR_LABEL_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
@@ -72,11 +72,10 @@ function clonePalette(palette: StylePalette): StylePalette {
 }
 
 function resolvePaletteTier(kitSize: ProcessingKitSize): PaletteTier {
-  if (kitSize === "A3") return "public_a3";
-  if (kitSize === "A2") return "public_a2";
+  if (kitSize === "30x40" || kitSize === "A3") return "public_standard";
+  if (kitSize === "40x50" || kitSize === "40x60" || kitSize === "A2") return "public_premium";
   return "legacy";
 }
-
 const PALETTE_LIBRARY: Record<ArtStyle, Record<PaletteTier, StylePalette>> = {
   original: {
     legacy: {
@@ -93,7 +92,7 @@ const PALETTE_LIBRARY: Record<ArtStyle, Record<PaletteTier, StylePalette>> = {
         c("Black", "#080808", "Mars Black"),
       ],
     },
-    public_a3: {
+    public_standard: {
       name: "Original",
       description: "Natural portrait palette with balanced skin tones, fabrics, and clear shadows.",
       colors: [
@@ -109,7 +108,7 @@ const PALETTE_LIBRARY: Record<ArtStyle, Record<PaletteTier, StylePalette>> = {
         c("Carbon", "#111417", "Mars Black"),
       ],
     },
-    public_a2: {
+    public_premium: {
       name: "Original",
       description: "Extended natural palette with cleaner facial transitions and background separation.",
       colors: [
@@ -143,7 +142,7 @@ const PALETTE_LIBRARY: Record<ArtStyle, Record<PaletteTier, StylePalette>> = {
         c("Near Black", "#150C04", "Ivory Black"),
       ],
     },
-    public_a3: {
+    public_standard: {
       name: "Vintage",
       description: "Warm nostalgic earth palette with elegant sepia depth.",
       colors: [
@@ -159,7 +158,7 @@ const PALETTE_LIBRARY: Record<ArtStyle, Record<PaletteTier, StylePalette>> = {
         c("Near Black", "#150E09", "Ivory Black"),
       ],
     },
-    public_a2: {
+    public_premium: {
       name: "Vintage",
       description: "Expanded sepia palette with richer midtones and softer background transitions.",
       colors: [
@@ -193,7 +192,7 @@ const PALETTE_LIBRARY: Record<ArtStyle, Record<PaletteTier, StylePalette>> = {
         c("Black", "#0C0A08", "Mars Black"),
       ],
     },
-    public_a3: {
+    public_standard: {
       name: "Pop Art",
       description: "High-chroma palette with bold comic-book separation.",
       colors: [
@@ -209,7 +208,7 @@ const PALETTE_LIBRARY: Record<ArtStyle, Record<PaletteTier, StylePalette>> = {
         c("Black", "#0E0B0A", "Mars Black"),
       ],
     },
-    public_a2: {
+    public_premium: {
       name: "Pop Art",
       description: "Expanded pop palette with deeper cool accents for cleaner posterized separation.",
       colors: [
@@ -243,7 +242,7 @@ const PALETTE_LIBRARY: Record<ArtStyle, Record<PaletteTier, StylePalette>> = {
         c("Ink", "#3A4654", "Payne's Grey"),
       ],
     },
-    public_a3: {
+    public_standard: {
       name: "Watercolor",
       description: "Soft painterly palette with airy washes and gentle edges.",
       colors: [
@@ -259,7 +258,7 @@ const PALETTE_LIBRARY: Record<ArtStyle, Record<PaletteTier, StylePalette>> = {
         c("Ink", "#3A4654", "Payne's Grey"),
       ],
     },
-    public_a2: {
+    public_premium: {
       name: "Watercolor",
       description: "Expanded wash palette with extra floral mids and deeper anchors.",
       colors: [
@@ -293,7 +292,7 @@ const PALETTE_LIBRARY: Record<ArtStyle, Record<PaletteTier, StylePalette>> = {
         c("Charcoal", "#1A1C20", "Mars Black"),
       ],
     },
-    public_a3: {
+    public_standard: {
       name: "Poster",
       description: "Graphic poster palette with strong value breaks and readable blocks.",
       colors: [
@@ -309,7 +308,7 @@ const PALETTE_LIBRARY: Record<ArtStyle, Record<PaletteTier, StylePalette>> = {
         c("Charcoal", "#1A1C20", "Mars Black"),
       ],
     },
-    public_a2: {
+    public_premium: {
       name: "Poster",
       description: "Expanded graphic palette with more separation in warm highlights and cool shadows.",
       colors: [
@@ -360,5 +359,5 @@ export function resolveLegacyPalette(style: ArtStyle | string): StylePalette {
 }
 
 export function getShowcasePalette(style: ArtStyle | string) {
-  return resolvePaletteForProcessing(style, "A3");
+  return resolvePaletteForProcessing(style, "30x40");
 }
