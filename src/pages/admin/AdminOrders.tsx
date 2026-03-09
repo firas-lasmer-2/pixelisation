@@ -12,6 +12,7 @@ import { OrderDetailSheet } from "@/components/admin/OrderDetailSheet";
 import { Search, RefreshCw, Download, Printer, CalendarIcon, X } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { getKitDisplayLabel } from "@/lib/kitCatalog";
 import type { Database } from "@/integrations/supabase/types";
 
 type Order = Database["public"]["Tables"]["orders"]["Row"];
@@ -36,7 +37,7 @@ function exportCSV(orders: Order[]) {
   const headers = ["Ref", "Category", "First Name", "Last Name", "Phone", "Email", "Kit Size", "Art Style", "Price (DT)", "Status", "Governorate", "City", "Address", "Postal Code", "Gift", "Gift Message", "Created", "Updated"];
   const rows = orders.map((o) => [
     o.order_ref, (o as any).category || "classic", o.contact_first_name, o.contact_last_name, o.contact_phone, o.contact_email,
-    o.kit_size, o.art_style, o.total_price, o.status, o.shipping_governorate, o.shipping_city,
+    getKitDisplayLabel(o.kit_size), o.art_style, o.total_price, o.status, o.shipping_governorate, o.shipping_city,
     o.shipping_address, o.shipping_postal_code || "", o.is_gift ? "Yes" : "No", o.gift_message || "",
     new Date(o.created_at).toLocaleString(), new Date(o.updated_at).toLocaleString(),
   ]);
@@ -59,7 +60,7 @@ function printShippingLabels(orders: Order[]) {
       <div style="font-size:13px;margin-bottom:2px;">${o.shipping_address}</div>
       <div style="font-size:13px;margin-bottom:2px;">${o.shipping_city}, ${o.shipping_governorate} ${o.shipping_postal_code || ""}</div>
       <div style="font-size:13px;margin-top:8px;">📞 ${o.contact_phone}</div>
-      <div style="font-size:11px;color:#666;margin-top:12px;">Kit: ${o.kit_size} · ${o.art_style}</div>
+      <div style="font-size:11px;color:#666;margin-top:12px;">Kit: ${getKitDisplayLabel(o.kit_size)} · ${o.art_style}</div>
     </div>
   `).join("");
 
@@ -293,7 +294,7 @@ export default function AdminOrders() {
                     <TableCell className="text-sm">{o.contact_first_name} {o.contact_last_name}</TableCell>
                     <TableCell className="text-sm font-mono">{o.contact_phone}</TableCell>
                     <TableCell className="text-xs">{o.shipping_governorate}</TableCell>
-                    <TableCell className="text-xs">{o.kit_size}</TableCell>
+                    <TableCell className="text-xs">{getKitDisplayLabel(o.kit_size)}</TableCell>
                     <TableCell>
                       <Badge variant="outline" className="text-[10px]">{(o as any).category || "classic"}</Badge>
                     </TableCell>

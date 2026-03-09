@@ -5,21 +5,16 @@ import {
   type PaintingDedication,
 } from "@/lib/dedicationOverlay";
 import { renderSmoothPreview, type ProcessingResult } from "@/lib/imageProcessing";
+import {
+  DEFAULT_PUBLIC_KIT,
+  getKitConfig,
+  isKitSize,
+  type KitSize,
+} from "@/lib/kitCatalog";
 import { COMPACT_PALETTES, PALETTES, type StylePalette } from "@/lib/palettes";
-import type { ArtStyle, KitSize, OrderState } from "@/lib/store";
+import type { ArtStyle, OrderState } from "@/lib/store";
 import { getPhoto } from "@/lib/store";
 import { getPaintingStats } from "@/lib/paintingLayout";
-
-const KIT_META: Record<
-  KitSize,
-  { label: string; estimatedHours: string; difficultyLabel: string; difficultyLevel: number }
-> = {
-  stamp_kit_40x50: { label: "40 x 50 cm", estimatedHours: "15-30 h", difficultyLabel: "Avance", difficultyLevel: 3 },
-  stamp_kit_30x40: { label: "30 x 40 cm", estimatedHours: "8-20 h", difficultyLabel: "Intermediaire", difficultyLevel: 2 },
-  stamp_kit_A4: { label: "A4 (21 x 30 cm)", estimatedHours: "4-8 h", difficultyLabel: "Debutant", difficultyLevel: 1 },
-  stamp_kit_A3: { label: "A3 (29,7 x 42 cm)", estimatedHours: "8-20 h", difficultyLabel: "Intermediaire", difficultyLevel: 2 },
-  stamp_kit_A2: { label: "A2 (42 x 59,4 cm)", estimatedHours: "20-40 h", difficultyLabel: "Expert", difficultyLevel: 4 },
-};
 
 type LegacyViewerData = {
   indices: number[];
@@ -72,10 +67,11 @@ export interface PaintingManifest {
 
 function inferKitSize(gridCols: number, gridRows: number): KitSize {
   if (gridCols === 160 && gridRows === 200) return "stamp_kit_40x50";
+  if (gridCols === 120 && gridRows === 160) return "stamp_kit_30x40";
   if (gridCols === 84 && gridRows === 119) return "stamp_kit_A4";
   if (gridCols === 118 && gridRows === 168) return "stamp_kit_A3";
   if (gridCols === 168 && gridRows === 237) return "stamp_kit_A2";
-  return "stamp_kit_30x40";
+  return DEFAULT_PUBLIC_KIT;
 }
 
 export function orderStyleToPaletteKey(style: ArtStyle | string) {
@@ -133,7 +129,7 @@ function buildBaseManifest(input: {
   gridRows: number;
   indices: number[];
 }) {
-  const kitMeta = KIT_META[input.kitSize];
+  const kit = getKitConfig(input.kitSize);
   const stats = getPaintingStats(input.gridCols, input.gridRows);
   const palette = resolveManifestPalette({
     kitSize: input.kitSize,
@@ -145,7 +141,7 @@ function buildBaseManifest(input: {
     instructionCode: input.instructionCode.toUpperCase(),
     category: input.category,
     kitSize: input.kitSize,
-    canvasLabel: kitMeta.label,
+    canvasLabel: kit.manifestLabel,
     artStyle: input.artStyle,
     paletteKey: input.paletteKey,
     createdAt: input.createdAt,
@@ -158,9 +154,9 @@ function buildBaseManifest(input: {
     stats: {
       ...stats,
       colorCount: palette.colors.length,
-      estimatedHours: kitMeta.estimatedHours,
-      difficultyLabel: kitMeta.difficultyLabel,
-      difficultyLevel: kitMeta.difficultyLevel,
+      estimatedHours: kit.hoursLabel,
+      difficultyLabel: kit.manifestDifficultyLabel,
+      difficultyLevel: kit.difficultyLevel,
     },
   } satisfies ManifestBase;
 }
@@ -207,7 +203,10 @@ export function normalizePaintingManifest(raw: unknown, instructionCode: string)
     );
   }
 
-  const inferredKitSize = candidate.kitSize || inferKitSize(candidate.gridCols, candidate.gridRows);
+  const inferredKitSize =
+    candidate.kitSize && isKitSize(candidate.kitSize)
+      ? candidate.kitSize
+      : inferKitSize(candidate.gridCols, candidate.gridRows);
   const artStyle = candidate.artStyle || (candidate.paletteKey === "popart" ? "pop_art" : "original");
   const base = buildBaseManifest({
     orderRef: candidate.orderRef || "",

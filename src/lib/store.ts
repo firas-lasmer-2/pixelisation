@@ -2,9 +2,10 @@ import { createContext, useContext, useState, useCallback, type ReactNode } from
 import { Area } from "react-easy-crop";
 import React from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { KitSize as CatalogKitSize } from "@/lib/kitCatalog";
 
 export type OrderCategory = "classic" | "family" | "kids_dream" | "pet";
-export type KitSize = "stamp_kit_40x50" | "stamp_kit_30x40" | "stamp_kit_A4" | "stamp_kit_A3" | "stamp_kit_A2";
+export type KitSize = CatalogKitSize;
 export type ArtStyle = "original" | "vintage" | "pop_art";
 
 export interface ContactInfo {
@@ -40,7 +41,6 @@ export interface OrderState {
   aiGenerationRunId: string;
 }
 
-/** Backward compat: first photo */
 export function getPhoto(order: OrderState): string {
   return order.photos[0] || "";
 }
@@ -214,7 +214,7 @@ export function OrderProvider({ children }: { children: ReactNode }) {
   return React.createElement(
     OrderContext.Provider,
     { value: { order, setCategory, setPhoto, removePhoto, setCroppedArea, setStyle, setSize, setContact, setShipping, setGift, setDedicationText, setDreamJob, setAiGeneratedUrl, confirmOrder, resetOrder } },
-    children
+    children,
   );
 }
 
@@ -224,32 +224,10 @@ export function useOrder() {
   return ctx;
 }
 
-export const PRICING: Record<KitSize, number> = {
-  stamp_kit_40x50: 449,
-  stamp_kit_30x40: 349,
-  stamp_kit_A4: 249,
-  stamp_kit_A3: 299,
-  stamp_kit_A2: 399,
-};
-
-export const ORIGINAL_PRICING: Record<KitSize, number> = {
-  stamp_kit_40x50: 549,
-  stamp_kit_30x40: 429,
-  stamp_kit_A4: 329,
-  stamp_kit_A3: 389,
-  stamp_kit_A2: 499,
-};
+export { KIT_LABELS as SIZE_LABELS, KIT_ORIGINAL_PRICING as ORIGINAL_PRICING, KIT_PRICING as PRICING } from "@/lib/kitCatalog";
 
 export const BUNDLE_PRICE = 749;
 export const BUNDLE_ORIGINAL = 898;
-
-export const SIZE_LABELS: Record<KitSize, string> = {
-  stamp_kit_40x50: "40 × 50 cm",
-  stamp_kit_30x40: "30 × 40 cm",
-  stamp_kit_A4: "A4 (21 × 30 cm)",
-  stamp_kit_A3: "A3 (29,7 × 42 cm)",
-  stamp_kit_A2: "A2 (42 × 59,4 cm)",
-};
 
 export const CATEGORY_META: Record<OrderCategory, { label: string; description: string; photosNeeded: number; icon: string }> = {
   classic: { label: "Portrait Classique", description: "Votre photo transformée en peinture par numéros", photosNeeded: 1, icon: "🎨" },

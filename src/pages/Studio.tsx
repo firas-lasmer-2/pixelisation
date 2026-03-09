@@ -4,7 +4,23 @@ import { Area } from "react-easy-crop";
 import { Navbar } from "@/components/shared/Navbar";
 import { Footer } from "@/components/landing/Footer";
 import { useTranslation } from "@/i18n";
-import { useOrder, getPhoto, PRICING, ORIGINAL_PRICING, SIZE_LABELS, TUNISIAN_GOVERNORATES, CATEGORY_META, DREAM_JOBS, type KitSize, type ArtStyle, type ContactInfo, type ShippingInfo, type OrderCategory } from "@/lib/store";
+import { useOrder, getPhoto, PRICING, TUNISIAN_GOVERNORATES, CATEGORY_META, DREAM_JOBS, type KitSize, type ArtStyle, type ContactInfo, type ShippingInfo, type OrderCategory } from "@/lib/store";
+import {
+  DEFAULT_PUBLIC_KIT,
+  KIT_TONE_STYLES,
+  MAX_KIT_DIFFICULTY,
+  getKitComparisonStats,
+  getKitConfig,
+  getKitDisplayLabel,
+  getKitSavings,
+  getPublicKitConfigs,
+  isKitSize,
+  isLegacyOnlyKit,
+  isPublicKit,
+  resolveProcessingKitSize,
+  type KitBadgeIcon,
+  type KitTone,
+} from "@/lib/kitCatalog";
 import { supabase } from "@/integrations/supabase/client";
 import { UploadZone } from "@/components/UploadZone";
 import { CategorySelector } from "@/components/studio/CategorySelector";
@@ -13,7 +29,7 @@ import { MultiUploadZone } from "@/components/studio/MultiUploadZone";
 import { SaveProgressModal } from "@/components/shared/SaveProgressModal";
 import { CropScreen } from "@/components/CropScreen";
 import { ProcessingScreen } from "@/components/ProcessingScreen";
-import { processImage, ProcessingResult, type KitSize as ImgKitSize } from "@/lib/imageProcessing";
+import { processImage, ProcessingResult } from "@/lib/imageProcessing";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,256 +48,26 @@ import { STORAGE_KEYS } from "@/lib/brand";
 import { DEDICATION_MAX_LENGTH, normalizeDedicationDraft } from "@/lib/dedicationOverlay";
 import { trackFunnelEvent } from "@/lib/funnel";
 
-/* ─── Kit size → image processing key mapping ─── */
-const STORE_TO_IMG: Record<KitSize, ImgKitSize> = {
-  stamp_kit_40x50: "40x50",
-  stamp_kit_30x40: "30x40",
-  stamp_kit_A4: "A4",
-  stamp_kit_A3: "A3",
-  stamp_kit_A2: "A2",
+/* ─── Kit visuals ─── */
+const PUBLIC_STUDIO_KITS = getPublicKitConfigs();
+const DIFFICULTY_COLORS = ["bg-green-500", "bg-amber-500", "bg-rose-500", "bg-violet-600"];
+const BADGE_ICON_COMPONENTS: Record<KitBadgeIcon, typeof Sparkles> = {
+  sparkles: Sparkles,
+  star: Star,
+  crown: Crown,
+};
+const TONE_ICON_COMPONENTS: Record<KitTone, typeof Crown> = {
+  emerald: Leaf,
+  gold: Award,
+  accent: Crown,
+  purple: Crown,
 };
 
-/* ─── 6 Steps (added Category as step 0) ─── */
-const getStepMeta = (category: OrderCategory) => {
-  const base = [
-    { icon: Sparkles, label: "Catégorie" },
-    { icon: Package, label: "Kit" },
-    { icon: Upload, label: "Photo" },
-    { icon: Camera, label: "Recadrage" },
-    { icon: Palette, label: "Style" },
-    { icon: CheckCircle, label: "Confirmation" },
-  ];
-  // For AI categories, insert AI step before style
-  if (category !== "classic") {
-    base.splice(4, 0, { icon: Wand2, label: "IA Magie" });
-  }
-  return base;
-};
-
-/* ─── Premium Step Indicator ─── */
-function StepIndicator({ currentStep, totalSteps, stepMeta, onStepClick }: { currentStep: number; totalSteps: number; stepMeta: { icon: any; label: string }[]; onStepClick?: (step: number) => void }) {
-  return (
-    <div className="w-full max-w-3xl mx-auto">
-      <div className="flex items-center justify-between relative">
-        <div className="absolute top-5 left-[6%] right-[6%] h-px bg-border z-0" />
-        <div
-          className="absolute top-5 left-[6%] h-px bg-primary z-0 transition-all duration-700 ease-out"
-          style={{ width: `${((currentStep - 1) / (totalSteps - 1)) * 88}%` }}
-        />
-
-        {stepMeta.map((meta, i) => {
-          const stepNum = i + 1;
-          const isActive = stepNum === currentStep;
-          const isDone = stepNum < currentStep;
-          const isClickable = isDone && onStepClick;
-
-          return (
-            <div
-              key={i}
-              onClick={() => isClickable && onStepClick(stepNum)}
-              className={`relative z-10 flex flex-col items-center gap-2 ${isClickable ? "cursor-pointer" : ""}`}
-            >
-              <div
-                className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-500 border-2 ${
-                  isDone
-                    ? "bg-primary border-primary text-primary-foreground"
-                    : isActive
-                    ? "border-primary bg-background text-primary step-gold-pulse"
-                    : "border-muted bg-background text-muted-foreground"
-                }`}
-              >
-                {isDone ? <Check className="h-4 w-4" /> : stepNum}
-              </div>
-              <span
-                className={`text-[10px] sm:text-[11px] font-semibold transition-colors text-center hidden sm:block ${
-                  isActive ? "text-primary" : isDone ? "text-foreground" : "text-muted-foreground"
-                }`}
-                style={{ fontFamily: "'Playfair Display', serif" }}
-              >
-                {meta.label}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-/* ─── Size card config ─── */
-const SIZE_CARDS: {
-  key: KitSize;
-  accent: string;
-  accentClass: string;
-  icon: typeof Crown;
-  badge?: { label: string; icon: typeof Star; className: string };
-  savings: number;
-}[] = [
-  {
-    key: "stamp_kit_A4",
-    accent: "card-accent-green",
-    accentClass: "text-green-600",
-    icon: Leaf,
-    badge: { label: "Débutant", icon: Sparkles, className: "bg-green-50 text-green-700 border-green-200" },
-    savings: Math.round((1 - PRICING.stamp_kit_A4 / ORIGINAL_PRICING.stamp_kit_A4) * 100),
-  },
-  {
-    key: "stamp_kit_A3",
-    accent: "card-accent-gold",
-    accentClass: "text-primary",
-    icon: Award,
-    savings: Math.round((1 - PRICING.stamp_kit_A3 / ORIGINAL_PRICING.stamp_kit_A3) * 100),
-  },
-  {
-    key: "stamp_kit_30x40",
-    accent: "card-accent-gold",
-    accentClass: "text-primary",
-    icon: Award,
-    savings: Math.round((1 - PRICING.stamp_kit_30x40 / ORIGINAL_PRICING.stamp_kit_30x40) * 100),
-  },
-  {
-    key: "stamp_kit_40x50",
-    accent: "card-accent-burgundy",
-    accentClass: "text-accent",
-    icon: Crown,
-    badge: { label: "Populaire", icon: Star, className: "bg-accent/10 text-accent border-accent/20" },
-    savings: Math.round((1 - PRICING.stamp_kit_40x50 / ORIGINAL_PRICING.stamp_kit_40x50) * 100),
-  },
-  {
-    key: "stamp_kit_A2",
-    accent: "card-accent-burgundy",
-    accentClass: "text-accent",
-    icon: Crown,
-    badge: { label: "Expert", icon: Star, className: "bg-purple-50 text-purple-700 border-purple-200" },
-    savings: Math.round((1 - PRICING.stamp_kit_A2 / ORIGINAL_PRICING.stamp_kit_A2) * 100),
-  },
-];
-
-const SIZE_DETAILS: Record<
-  KitSize,
-  {
-    colors: string;
-    hours: string;
-    cells: string;
-    difficulty: number;
-    diffLabel: string;
-    dimensions: string;
-    headline: string;
-    summary: string;
-    idealFor: string;
-    featureBullets: string[];
-  }
-> = {
-  stamp_kit_A4: {
-    colors: "10-12",
-    hours: "4-8",
-    cells: "~10 000",
-    difficulty: 1,
-    diffLabel: "Débutant",
-    dimensions: "21 x 29,7 cm",
-    headline: "Rapide, doux, accessible",
-    summary: "Le format le plus simple à terminer. Parfait pour une première expérience ou un petit cadeau plein d'attention.",
-    idealFor: "un premier essai, une chambre ou un cadeau discret",
-    featureBullets: [
-      "Se termine en quelques sessions sans fatigue visuelle.",
-      "Facile à encadrer et à offrir.",
-      "Excellent choix pour tester Helma en douceur.",
-    ],
-  },
-  stamp_kit_A3: {
-    colors: "12-15",
-    hours: "8-20",
-    cells: "~20 000",
-    difficulty: 2,
-    diffLabel: "Intermédiaire",
-    dimensions: "29,7 x 42 cm",
-    headline: "Le grand format papier",
-    summary: "Le format A3 offre une résolution comparable au 30×40 cm dans les proportions standard de la papeterie. Idéal pour un rendu net et facile à encadrer.",
-    idealFor: "portraits, cadeaux et décoration murale",
-    featureBullets: [
-      "Proportions standard A3 — facile à trouver un cadre.",
-      "Niveau de détail équivalent au 30×40 cm.",
-      "Bon choix pour un projet plus grand sans passer au format toile.",
-    ],
-  },
-  stamp_kit_30x40: {
-    colors: "12-15",
-    hours: "8-20",
-    cells: "19 200",
-    difficulty: 2,
-    diffLabel: "Intermédiaire",
-    dimensions: "30 x 40 cm",
-    headline: "Notre meilleur équilibre",
-    summary: "Le format Helma le plus polyvalent. Il donne plus de détail qu'un A4 sans devenir trop long ou trop exigeant.",
-    idealFor: "la plupart des portraits, couples et cadeaux",
-    featureBullets: [
-      "Bon niveau de détail sans rallonger inutilement le temps de peinture.",
-      "Le format le plus serein pour un premier vrai projet.",
-      "Très bon rendu final sur un mur ou posé sur un chevalet.",
-    ],
-  },
-  stamp_kit_40x50: {
-    colors: "12-15",
-    hours: "15-30",
-    cells: "32 000",
-    difficulty: 3,
-    diffLabel: "Avancé",
-    dimensions: "40 x 50 cm",
-    headline: "Pièce maîtresse",
-    summary: "Le grand format pour un rendu plus immersif, plus détaillé et vraiment marquant une fois terminé et encadré.",
-    idealFor: "un souvenir fort, un salon ou un cadeau signature",
-    featureBullets: [
-      "Plus d'espace pour les détails et les transitions.",
-      "Impact visuel supérieur une fois accroché.",
-      "Le meilleur choix si vous cherchez un effet waouh.",
-    ],
-  },
-  stamp_kit_A2: {
-    colors: "12-15",
-    hours: "20-40",
-    cells: "~40 000",
-    difficulty: 4,
-    diffLabel: "Expert",
-    dimensions: "42 x 59,4 cm",
-    headline: "Format monumental",
-    summary: "Le plus grand format disponible, pour une pièce murale qui impressionne. Chaque détail est amplifié à l'échelle d'une véritable œuvre d'art.",
-    idealFor: "une pièce de salon, un cadeau exceptionnel ou un projet ambitieux",
-    featureBullets: [
-      "Niveau de détail maximal — comparable au 40×50 cm en proportions A.",
-      "Effet visuel monumental une fois terminé.",
-      "Pour les peintres expérimentés qui cherchent un défi.",
-    ],
-  },
-};
-
-const KIT_INCLUDES = [
-  { icon: Paintbrush, label: "Toile pré-imprimée" },
-  { icon: Palette, label: "Pots de peinture acrylique" },
-  { icon: Layers, label: "Pinceaux (3 tailles)" },
-  { icon: BookOpen, label: "Guide numérique PDF" },
-];
-
-const DIFFICULTY_COLORS = ["bg-green-500", "bg-amber-500", "bg-red-500", "bg-purple-600"];
-
-/* ─── Canvas scale illustration ─── */
 function CanvasScale({ size, variant = "compact" }: { size: KitSize; variant?: "compact" | "hero" }) {
-  const scales: Record<"compact" | "hero", Record<KitSize, { w: number; h: number }>> = {
-    compact: {
-      stamp_kit_A4: { w: 32, h: 44 },
-      stamp_kit_A3: { w: 38, h: 54 },
-      stamp_kit_30x40: { w: 42, h: 56 },
-      stamp_kit_40x50: { w: 52, h: 64 },
-      stamp_kit_A2: { w: 58, h: 82 },
-    },
-    hero: {
-      stamp_kit_A4: { w: 108, h: 152 },
-      stamp_kit_A3: { w: 128, h: 180 },
-      stamp_kit_30x40: { w: 142, h: 188 },
-      stamp_kit_40x50: { w: 170, h: 212 },
-      stamp_kit_A2: { w: 180, h: 254 },
-    },
-  };
-  const s = scales[variant][size];
+  const kit = getKitConfig(size);
+  const scale = variant === "hero" ? 4.25 : 1.38;
+  const width = Math.round(kit.widthCm * scale);
+  const height = Math.round(kit.heightCm * scale);
 
   if (variant === "hero") {
     return (
@@ -289,7 +75,7 @@ function CanvasScale({ size, variant = "compact" }: { size: KitSize; variant?: "
         <div className="flex items-end gap-4">
           <div
             className="relative overflow-hidden rounded-[22px] border border-foreground/10 bg-[linear-gradient(135deg,hsl(var(--primary)/0.14),transparent_60%)] shadow-[0_24px_60px_-36px_rgba(0,0,0,0.45)]"
-            style={{ width: s.w, height: s.h }}
+            style={{ width, height }}
           >
             <div
               className="absolute inset-0 opacity-60"
@@ -305,7 +91,7 @@ function CanvasScale({ size, variant = "compact" }: { size: KitSize; variant?: "
 
           <div className="flex flex-col gap-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
             <span>Format</span>
-            <span className="text-foreground font-semibold normal-case tracking-normal text-sm">{SIZE_LABELS[size]}</span>
+            <span className="text-foreground font-semibold normal-case tracking-normal text-sm">{kit.displayLabel}</span>
           </div>
         </div>
       </div>
@@ -316,7 +102,7 @@ function CanvasScale({ size, variant = "compact" }: { size: KitSize; variant?: "
     <div className="flex items-end justify-center h-16 mb-2">
       <div
         className="border-2 border-foreground/15 rounded-sm bg-muted/30 transition-all duration-300"
-        style={{ width: s.w, height: s.h }}
+        style={{ width, height }}
       />
     </div>
   );
@@ -333,6 +119,121 @@ function SectionHeading({ title, subtitle }: { title: string; subtitle: string }
         {title}
       </h2>
       <p className="text-sm text-muted-foreground mt-3">{subtitle}</p>
+    </div>
+  );
+}
+
+type StepMetaItem = {
+  label: string;
+  icon: typeof Sparkles;
+};
+
+const STEP_META_BY_CATEGORY: Record<OrderCategory, StepMetaItem[]> = {
+  classic: [
+    { label: "Expérience", icon: Sparkles },
+    { label: "Format", icon: Package },
+    { label: "Photo", icon: Upload },
+    { label: "Recadrage", icon: Camera },
+    { label: "Style", icon: Palette },
+    { label: "Commande", icon: CreditCard },
+  ],
+  family: [
+    { label: "Expérience", icon: Sparkles },
+    { label: "Format", icon: Package },
+    { label: "Photos", icon: Upload },
+    { label: "Fusion", icon: Wand2 },
+    { label: "Recadrage", icon: Camera },
+    { label: "Style", icon: Palette },
+    { label: "Commande", icon: CreditCard },
+  ],
+  kids_dream: [
+    { label: "Expérience", icon: Sparkles },
+    { label: "Format", icon: Package },
+    { label: "Photo", icon: Upload },
+    { label: "Magie", icon: Wand2 },
+    { label: "Recadrage", icon: Camera },
+    { label: "Style", icon: Palette },
+    { label: "Commande", icon: CreditCard },
+  ],
+  pet: [
+    { label: "Expérience", icon: Sparkles },
+    { label: "Format", icon: Package },
+    { label: "Photo", icon: Upload },
+    { label: "Portrait", icon: Wand2 },
+    { label: "Recadrage", icon: Camera },
+    { label: "Style", icon: Palette },
+    { label: "Commande", icon: CreditCard },
+  ],
+};
+
+function getStepMeta(category: OrderCategory) {
+  return STEP_META_BY_CATEGORY[category] || STEP_META_BY_CATEGORY.classic;
+}
+
+const KIT_INCLUDES: Array<{ icon: typeof Package; label: string }> = [
+  { icon: Paintbrush, label: "Toile numérotée prête à peindre" },
+  { icon: Palette, label: "Peintures assorties au visuel final" },
+  { icon: Package, label: "Kit matériel pour commencer sans attendre" },
+  { icon: BookOpen, label: "Guide PDF premium et viewer interactif" },
+];
+
+function StepIndicator({
+  currentStep,
+  totalSteps,
+  stepMeta,
+  onStepClick,
+}: {
+  currentStep: number;
+  totalSteps: number;
+  stepMeta: StepMetaItem[];
+  onStepClick: (step: number) => void;
+}) {
+  return (
+    <div className="rounded-[26px] border border-border/80 bg-card/85 p-4 shadow-sm">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Parcours studio</p>
+        <p className="text-xs text-muted-foreground">Étape {Math.min(currentStep, totalSteps)} / {totalSteps}</p>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-3 xl:grid-cols-7">
+        {stepMeta.map((item, index) => {
+          const stepNumber = index + 1;
+          const Icon = item.icon;
+          const isActive = stepNumber === currentStep;
+          const isCompleted = stepNumber < currentStep;
+          const isClickable = stepNumber <= currentStep;
+
+          return (
+            <button
+              key={item.label}
+              type="button"
+              onClick={() => isClickable && onStepClick(stepNumber)}
+              disabled={!isClickable}
+              className={`flex items-center gap-3 rounded-2xl border px-3 py-3 text-left transition-all ${
+                isActive
+                  ? "border-primary/40 bg-primary/[0.08] text-foreground gold-glow"
+                  : isCompleted
+                  ? "border-border bg-background/80 text-foreground hover:border-primary/25 hover:bg-primary/[0.04]"
+                  : "border-border/70 bg-background/50 text-muted-foreground opacity-75"
+              }`}
+            >
+              <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border ${
+                isActive
+                  ? "border-primary/30 bg-primary text-primary-foreground"
+                  : isCompleted
+                  ? "border-primary/20 bg-primary/10 text-primary"
+                  : "border-border bg-background text-muted-foreground"
+              }`}>
+                {isCompleted ? <Check className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Étape {stepNumber}</p>
+                <p className="text-sm font-medium">{item.label}</p>
+              </div>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -452,8 +353,8 @@ const Studio = () => {
         setCategory(nextCategory as OrderCategory);
       }
 
-      if (cart.selectedSize && ["stamp_kit_40x50", "stamp_kit_30x40", "stamp_kit_A4", "stamp_kit_A3", "stamp_kit_A2"].includes(cart.selectedSize)) {
-        setSize(cart.selectedSize as KitSize);
+      if (isKitSize(cart.selectedSize)) {
+        setSize(cart.selectedSize);
       }
 
       if (cart.dreamJob) {
@@ -630,7 +531,7 @@ const Studio = () => {
     setProcessing(true);
 
     const photo = order.aiGeneratedUrl || getPhoto(order);
-    const imgKitSize = STORE_TO_IMG[order.selectedSize];
+    const imgKitSize = resolveProcessingKitSize(order.selectedSize);
 
     try {
       const results = await processImage(photo, croppedArea, imgKitSize);
@@ -832,6 +733,16 @@ const Studio = () => {
 
   const photo = getPhoto(order);
   const photoForProcessing = order.aiGeneratedUrl || photo;
+  const hasLegacySelectedKit = isLegacyOnlyKit(order.selectedSize);
+  const selectedPublicKit = order.selectedSize && isPublicKit(order.selectedSize)
+    ? getKitConfig(order.selectedSize)
+    : null;
+  const legacySelectedKit = hasLegacySelectedKit && order.selectedSize
+    ? getKitConfig(order.selectedSize)
+    : null;
+  const featuredKit = selectedPublicKit || getKitConfig(DEFAULT_PUBLIC_KIT);
+  const featuredKitStats = getKitComparisonStats(featuredKit.id);
+  const FeaturedIcon = TONE_ICON_COMPONENTS[featuredKit.tone];
 
   if (recoveringCart) {
     return (
@@ -910,102 +821,277 @@ const Studio = () => {
                 <div>
                   <SectionHeading
                     title="Choisissez votre kit"
-                    subtitle="Choisissez le format qui correspond au niveau de détail, au temps de peinture et à l'effet final que vous recherchez."
+                    subtitle="La nouvelle gamme publique Helma commence désormais au format A3. Choisissez le niveau de détail, la présence au mur et le temps de peinture qui vous conviennent."
                   />
 
-                  <div className="grid gap-5 sm:grid-cols-3 mb-8">
-                    {SIZE_CARDS.map((card) => {
-                      const isSelected = order.selectedSize === card.key;
-                      const details = SIZE_DETAILS[card.key];
-                      const CardIcon = card.icon;
+                  {hasLegacySelectedKit && legacySelectedKit && (
+                    <div className="mb-8 rounded-[28px] border border-green-200 bg-green-50/70 p-6 shadow-sm">
+                      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                        <div className="space-y-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge className="rounded-full border-green-200 bg-white text-green-700">Format restauré</Badge>
+                            <Badge variant="outline" className="rounded-full border-green-200 text-green-700">
+                              {legacySelectedKit.displayLabel}
+                            </Badge>
+                          </div>
+                          <div>
+                            <h3 className="text-2xl font-bold text-foreground">Votre commande legacy utilise encore le format A4</h3>
+                            <p className="mt-2 max-w-2xl text-sm leading-7 text-foreground/80">
+                              Ce format reste pleinement pris en charge pour cette session: PDF, viewer, manifest et checkout fonctionneront normalement. Pour une nouvelle qualité standard, vous pouvez passer à l'un des formats publics ci-dessous.
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                            <span className="rounded-full border border-green-200 bg-white px-3 py-1">{legacySelectedKit.hoursLabel}</span>
+                            <span className="rounded-full border border-green-200 bg-white px-3 py-1">{legacySelectedKit.colorsLabel} couleurs</span>
+                            <span className="rounded-full border border-green-200 bg-white px-3 py-1">{legacySelectedKit.displayDifficultyLabel}</span>
+                          </div>
+                        </div>
 
-                      return (
-                        <button
-                          key={card.key}
-                          type="button"
-                          onClick={() => setSize(card.key)}
-                          className={`group relative flex flex-col rounded-[28px] border p-6 text-left transition-all duration-300 hover:-translate-y-1 hover:shadow-xl ${
-                            isSelected
-                              ? "border-primary/50 bg-primary/[0.04] shadow-lg gold-glow"
-                              : card.key === "stamp_kit_30x40"
-                              ? "border-primary/20 bg-[linear-gradient(145deg,hsl(var(--card)),hsl(var(--primary)/0.04))]"
-                              : "border-border/80 bg-card hover:border-primary/25"
-                          }`}
-                        >
-                          {card.badge && (
-                            <span className={`absolute -top-3 left-1/2 -translate-x-1/2 inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[11px] font-semibold shadow-sm bg-background ${card.badge.className}`}>
-                              <card.badge.icon className="h-3 w-3" />
-                              {card.badge.label}
+                        <Button variant="outline" onClick={() => setSize(DEFAULT_PUBLIC_KIT)} className="rounded-full border-green-300 bg-white text-green-700 hover:bg-green-100 hover:text-green-800">
+                          Passer au format {getKitConfig(DEFAULT_PUBLIC_KIT).shortLabel}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_420px] mb-8">
+                    <div className="relative overflow-hidden rounded-[30px] border border-primary/20 bg-[linear-gradient(145deg,hsl(var(--card)),hsl(var(--primary)/0.06))] p-6 sm:p-8 shadow-[0_28px_80px_-48px_rgba(0,0,0,0.35)]">
+                      <div className="absolute -top-20 right-0 h-48 w-48 rounded-full bg-primary/10 blur-3xl" />
+                      <div className="absolute -bottom-20 left-0 h-40 w-40 rounded-full bg-accent/10 blur-3xl" />
+
+                      <div className="relative z-10 grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-end">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge className="rounded-full bg-primary/10 text-primary border-primary/20 px-3 py-1">
+                              {selectedPublicKit ? "Votre sélection" : "Format recommandé"}
+                            </Badge>
+                            {featuredKit.badge && (() => {
+                              const FeaturedBadgeIcon = BADGE_ICON_COMPONENTS[featuredKit.badge.icon];
+                              return (
+                                <Badge variant="outline" className={`rounded-full px-3 py-1 ${KIT_TONE_STYLES[featuredKit.tone].badge}`}>
+                                  <FeaturedBadgeIcon className="mr-1 h-3 w-3" />
+                                  {featuredKit.badge.label}
+                                </Badge>
+                              );
+                            })()}
+                            {!order.selectedSize && (
+                              <span className="text-xs text-muted-foreground">
+                                Commencez par choisir un format pour continuer.
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="mt-5 flex items-start gap-4">
+                            <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border bg-background/80 ${KIT_TONE_STYLES[featuredKit.tone].text}`}>
+                              <FeaturedIcon className="h-6 w-6" />
+                            </div>
+                            <div>
+                              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                                {featuredKit.dimensionsLabel}
+                              </p>
+                              <h3 className="mt-2 text-3xl sm:text-4xl font-bold text-foreground">
+                                {featuredKit.displayLabel}
+                              </h3>
+                              <p className="mt-2 text-base sm:text-lg text-foreground/80">
+                                {featuredKit.headline}
+                              </p>
+                            </div>
+                          </div>
+
+                          <p className="mt-5 max-w-2xl text-sm sm:text-base leading-7 text-muted-foreground">
+                            {featuredKit.summary}
+                          </p>
+
+                          <div className="mt-5 flex flex-wrap gap-2">
+                            <span className="inline-flex items-center rounded-full border border-border bg-background/80 px-3 py-1 text-xs font-medium text-foreground">
+                              Idéal pour {featuredKit.idealFor}
                             </span>
-                          )}
-
-                          <div className="flex justify-center mb-5 mt-2">
-                            <CanvasScale size={card.key} variant="compact" />
+                            <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-medium text-primary">
+                              {featuredKit.displayDifficultyLabel}
+                            </span>
                           </div>
 
-                          <div className={`mb-3 flex h-10 w-10 items-center justify-center rounded-2xl border bg-background/80 ${card.accentClass}`}>
-                            <CardIcon className="h-5 w-5" />
+                          <div className="mt-6 grid gap-3 sm:grid-cols-4">
+                            <div className="rounded-2xl border border-border/70 bg-background/75 p-4">
+                              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                                Détail
+                              </p>
+                              <div className="mt-3 flex items-center gap-2 text-sm font-medium text-foreground">
+                                <Grid3X3 className="h-4 w-4 text-primary" />
+                                {featuredKitStats.totalCells.toLocaleString("fr-FR")}
+                              </div>
+                            </div>
+
+                            <div className="rounded-2xl border border-border/70 bg-background/75 p-4">
+                              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                                Couleurs
+                              </p>
+                              <div className="mt-3 flex items-center gap-2 text-sm font-medium text-foreground">
+                                <Palette className="h-4 w-4 text-primary" />
+                                {featuredKit.colorsLabel}
+                              </div>
+                            </div>
+
+                            <div className="rounded-2xl border border-border/70 bg-background/75 p-4">
+                              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                                Temps
+                              </p>
+                              <div className="mt-3 flex items-center gap-2 text-sm font-medium text-foreground">
+                                <Clock className="h-4 w-4 text-primary" />
+                                {featuredKit.hoursLabel}
+                              </div>
+                            </div>
+
+                            <div className="rounded-2xl border border-border/70 bg-background/75 p-4">
+                              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                                Guide
+                              </p>
+                              <div className="mt-3 flex items-center gap-2 text-sm font-medium text-foreground">
+                                <BookOpen className="h-4 w-4 text-primary" />
+                                {featuredKitStats.totalPages} pages
+                              </div>
+                            </div>
                           </div>
 
-                          <p className="text-xl font-bold text-foreground">{SIZE_LABELS[card.key]}</p>
-                          <p className="mt-0.5 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">{details.dimensions}</p>
-                          <p className="mt-3 text-sm font-semibold text-foreground/90">{details.headline}</p>
-                          <p className="mt-1 text-xs leading-5 text-muted-foreground line-clamp-3">{details.summary}</p>
-
-                          <div className="mt-4 grid grid-cols-3 gap-2">
-                            <div className="rounded-xl bg-secondary/60 p-2 text-center">
-                              <p className="text-[10px] text-muted-foreground">Temps</p>
-                              <p className="text-xs font-bold text-foreground">{details.hours}h</p>
-                            </div>
-                            <div className="rounded-xl bg-secondary/60 p-2 text-center">
-                              <p className="text-[10px] text-muted-foreground">Couleurs</p>
-                              <p className="text-xs font-bold text-foreground">{details.colors}</p>
-                            </div>
-                            <div className="rounded-xl bg-secondary/60 p-2 text-center">
-                              <p className="text-[10px] text-muted-foreground">Niveau</p>
-                              <p className="text-xs font-bold text-foreground">{details.diffLabel}</p>
-                            </div>
-                          </div>
-
-                          <div className="mt-3 flex gap-1">
-                            {[0, 1, 2].map((level) => (
-                              <div
-                                key={level}
-                                className={`h-1.5 flex-1 rounded-full ${
-                                  level < details.difficulty ? DIFFICULTY_COLORS[details.difficulty - 1] : "bg-muted"
-                                }`}
-                              />
+                          <div className="mt-6 space-y-3">
+                            {featuredKit.featureBullets.map((point) => (
+                              <div key={point} className="flex items-start gap-3 text-sm text-foreground/85">
+                                <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/12 text-primary">
+                                  <Check className="h-3 w-3" />
+                                </div>
+                                <span>{point}</span>
+                              </div>
                             ))}
                           </div>
+                        </div>
 
-                          <div className="mt-auto pt-5">
-                            <div className="flex items-end justify-between">
-                              <div>
-                                <span className="text-2xl font-bold text-foreground">{PRICING[card.key]}</span>
-                                <span className="ml-1 text-xs text-muted-foreground">DT</span>
-                                <p className="text-xs text-muted-foreground line-through">{ORIGINAL_PRICING[card.key]} DT</p>
+                        <div className="rounded-[26px] border border-border/70 bg-card/85 p-5 shadow-inner">
+                          <CanvasScale size={featuredKit.id} variant="hero" />
+
+                          <div className="mt-5 flex items-end justify-between gap-4">
+                            <div>
+                              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                                Prix du kit
+                              </p>
+                              <div className="mt-2 flex items-end gap-2">
+                                <span className="text-3xl font-bold text-foreground">{featuredKit.price}</span>
+                                <span className="pb-1 text-sm text-muted-foreground">DT</span>
                               </div>
-                              {card.savings > 0 && (
-                                <span className="rounded-xl bg-primary/10 px-2.5 py-1 text-xs font-bold text-primary">
-                                  -{card.savings}%
-                                </span>
-                              )}
+                              <p className="mt-1 text-xs text-muted-foreground line-through">
+                                {featuredKit.originalPrice} DT
+                              </p>
                             </div>
-                            <div className={`mt-4 flex h-10 w-full items-center justify-center rounded-2xl text-sm font-semibold transition-colors ${
-                              isSelected
-                                ? "bg-primary text-primary-foreground"
-                                : "border border-border bg-background/80 text-foreground group-hover:border-primary/30 group-hover:text-primary"
-                            }`}>
-                              {isSelected ? (
-                                <><Check className="mr-2 h-4 w-4" /> Sélectionné</>
-                              ) : (
-                                "Choisir ce format"
-                              )}
+
+                            {getKitSavings(featuredKit.id) > 0 && (
+                              <div className="rounded-2xl bg-primary text-primary-foreground px-3 py-2 text-right shadow-sm">
+                                <p className="text-[10px] uppercase tracking-[0.16em] opacity-80">Économie</p>
+                                <p className="text-lg font-bold">-{getKitSavings(featuredKit.id)}%</p>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="mt-5 rounded-2xl border border-border/70 bg-background/75 p-4">
+                            <div className="flex items-center justify-between gap-4">
+                              <span className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                                Niveau
+                              </span>
+                              <span className="text-xs font-medium text-foreground">{featuredKit.displayDifficultyLabel}</span>
+                            </div>
+                            <div className="mt-3 flex gap-1">
+                              {Array.from({ length: MAX_KIT_DIFFICULTY }).map((_, level) => (
+                                <div
+                                  key={level}
+                                  className={`h-2 flex-1 rounded-full ${
+                                    level < featuredKit.difficultyLevel ? DIFFICULTY_COLORS[featuredKit.difficultyLevel - 1] : "bg-muted"
+                                  }`}
+                                />
+                              ))}
                             </div>
                           </div>
-                        </button>
-                      );
-                    })}
+
+                          {!selectedPublicKit && (
+                            <Button onClick={() => setSize(featuredKit.id)} className="mt-5 w-full rounded-2xl btn-premium text-primary-foreground border-0">
+                              Choisir {featuredKit.shortLabel}
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      {PUBLIC_STUDIO_KITS.map((kit) => {
+                        const isSelected = order.selectedSize === kit.id;
+                        const toneStyles = KIT_TONE_STYLES[kit.tone];
+                        const CardIcon = TONE_ICON_COMPONENTS[kit.tone];
+                        const BadgeIcon = kit.badge ? BADGE_ICON_COMPONENTS[kit.badge.icon] : null;
+                        const stats = getKitComparisonStats(kit.id);
+
+                        return (
+                          <button
+                            key={kit.id}
+                            type="button"
+                            onClick={() => setSize(kit.id)}
+                            className={`group w-full rounded-[24px] border bg-card p-4 text-left transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg ${
+                              isSelected ? "border-primary/40 bg-primary/[0.04] gold-glow" : "border-border/80 hover:border-primary/25"
+                            }`}
+                          >
+                            <div className="flex items-start gap-4">
+                              <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border bg-background/80 ${toneStyles.text}`}>
+                                <CardIcon className="h-5 w-5" />
+                              </div>
+
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <p className="text-lg font-bold text-foreground">{kit.displayLabel}</p>
+                                  {BadgeIcon && kit.badge && (
+                                    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${toneStyles.badge}`}>
+                                      <BadgeIcon className="h-3 w-3" />
+                                      {kit.badge.label}
+                                    </span>
+                                  )}
+                                </div>
+
+                                <p className="mt-1 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                                  {kit.dimensionsLabel}
+                                </p>
+                                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                                  {kit.chooserNote}
+                                </p>
+
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                  <span className="rounded-full bg-secondary px-2.5 py-1 text-[11px] font-medium text-secondary-foreground">
+                                    {kit.hoursLabel}
+                                  </span>
+                                  <span className="rounded-full bg-secondary px-2.5 py-1 text-[11px] font-medium text-secondary-foreground">
+                                    {kit.colorsLabel} couleurs
+                                  </span>
+                                  <span className="rounded-full bg-secondary px-2.5 py-1 text-[11px] font-medium text-secondary-foreground">
+                                    {stats.totalPages} pages PDF
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="shrink-0 text-right">
+                                {isSelected ? (
+                                  <div className="ml-auto flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                                    <Check className="h-4 w-4" />
+                                  </div>
+                                ) : (
+                                  <div className="ml-auto flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition-colors group-hover:border-primary/30 group-hover:text-primary">
+                                    <NextIcon className="h-3.5 w-3.5" />
+                                  </div>
+                                )}
+
+                                <div className="mt-6">
+                                  <p className="text-2xl font-bold text-foreground">{kit.price} <span className="text-xs font-medium text-muted-foreground">DT</span></p>
+                                  <p className="text-xs text-muted-foreground line-through">{kit.originalPrice} DT</p>
+                                </div>
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
 
                   <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px] mb-8">
@@ -1039,20 +1125,20 @@ const Studio = () => {
                       <h3 className="mt-2 text-2xl font-bold text-foreground">Ce qui change vraiment</h3>
 
                       <div className="mt-6 space-y-4">
-                        <div className="rounded-2xl border border-border/70 bg-background/75 p-4">
-                          <p className="text-sm font-semibold text-foreground">A4</p>
-                          <p className="mt-1 text-sm text-muted-foreground">Le plus rapide à finir. Idéal si vous voulez une expérience légère et satisfaisante.</p>
-                        </div>
-
-                        <div className="rounded-2xl border border-primary/20 bg-primary/[0.04] p-4">
-                          <p className="text-sm font-semibold text-foreground">30x40</p>
-                          <p className="mt-1 text-sm text-muted-foreground">Le format le plus équilibré entre présence au mur, niveau de détail et temps de peinture.</p>
-                        </div>
-
-                        <div className="rounded-2xl border border-border/70 bg-background/75 p-4">
-                          <p className="text-sm font-semibold text-foreground">40x50</p>
-                          <p className="mt-1 text-sm text-muted-foreground">Plus immersif, plus spectaculaire, plus long. À choisir si vous voulez un vrai résultat signature.</p>
-                        </div>
+                        {PUBLIC_STUDIO_KITS.map((kit) => (
+                          <div
+                            key={kit.id}
+                            className={`rounded-2xl border p-4 ${
+                              kit.recommended ? "border-primary/20 bg-primary/[0.04]" : "border-border/70 bg-background/75"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <p className="text-sm font-semibold text-foreground">{kit.displayLabel}</p>
+                              <span className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">{kit.displayDifficultyLabel}</span>
+                            </div>
+                            <p className="mt-1 text-sm text-muted-foreground">{kit.chooserNote}</p>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>
@@ -1072,7 +1158,6 @@ const Studio = () => {
                   </div>
                 </div>
               )}
-
               {/* ═══════════════════════════════════════════
                   STEP 3: Upload Photo(s)
                  ═══════════════════════════════════════════ */}
@@ -1252,7 +1337,7 @@ const Studio = () => {
               {step === getCropStep() && !processing && order.selectedSize && (
                 <CropScreen
                   imageSrc={photoForProcessing}
-                  kitSize={STORE_TO_IMG[order.selectedSize]}
+                  kitSize={resolveProcessingKitSize(order.selectedSize)}
                   onCropComplete={handleCropComplete}
                   onBack={() => goToStep(isAICategory ? getAIStep() : getUploadStep())}
                 />
@@ -1498,7 +1583,7 @@ const Studio = () => {
                             <div className="flex items-center justify-between text-sm">
                               <span className="text-muted-foreground">Taille</span>
                               <div className="flex items-center gap-2">
-                                <span className="font-medium">{order.selectedSize && SIZE_LABELS[order.selectedSize]}</span>
+                                <span className="font-medium">{getKitDisplayLabel(order.selectedSize)}</span>
                                 <button onClick={() => goToStep(getKitStep())} className="text-primary hover:text-primary/70 transition-colors"><Edit3 className="h-3 w-3" /></button>
                               </div>
                             </div>
@@ -1617,3 +1702,6 @@ const Studio = () => {
 };
 
 export default Studio;
+
+
+

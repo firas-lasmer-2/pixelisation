@@ -5,6 +5,7 @@ import { CropScreen } from "@/components/CropScreen";
 import { ProcessingScreen } from "@/components/ProcessingScreen";
 import { ResultsScreen } from "@/components/ResultsScreen";
 import { processImage, ProcessingResult, KitSize } from "@/lib/imageProcessing";
+import { DEFAULT_PUBLIC_KIT, resolveProcessingKitSize } from "@/lib/kitCatalog";
 
 type Screen = "upload" | "crop" | "processing" | "results";
 
@@ -12,7 +13,7 @@ const Index = () => {
   const [screen, setScreen] = useState<Screen>("upload");
   const [imageSrc, setImageSrc] = useState<string>("");
   const [results, setResults] = useState<ProcessingResult[]>([]);
-  const [kitSize] = useState<KitSize>("40x50");
+  const [kitSize] = useState<KitSize>(() => resolveProcessingKitSize(DEFAULT_PUBLIC_KIT));
 
   const handleImageSelected = useCallback((dataUrl: string) => {
     setImageSrc(dataUrl);

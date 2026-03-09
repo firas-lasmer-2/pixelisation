@@ -1,15 +1,11 @@
 import { PaletteColor, StylePalette, PALETTES, COMPACT_PALETTES, STYLE_KEYS } from "./palettes";
+import { DEFAULT_PUBLIC_KIT, PROCESSING_GRID_CONFIG, resolveProcessingKitSize } from "./kitCatalog";
+import type { ProcessingKitSize as KitSize } from "./kitCatalog";
+
+export type { ProcessingKitSize as KitSize } from "./kitCatalog";
 
 // ─── Fixed DMC-style grid dimensions (2.5mm cells) ─────────────────────
-export type KitSize = "40x50" | "30x40" | "A4" | "A3" | "A2";
-
-export const GRID_CONFIG: Record<KitSize, { cols: number; rows: number }> = {
-  "30x40": { cols: 120, rows: 160 },  // 19,200 cells, 2.5mm each
-  "40x50": { cols: 160, rows: 200 },  // 32,000 cells, 2.5mm each
-  "A4":    { cols: 84,  rows: 119 },  // 9,996 cells, 2.5mm each
-  "A3":    { cols: 118, rows: 168 },  // 19,824 cells, 2.5mm each
-  "A2":    { cols: 168, rows: 237 },  // 39,816 cells, 2.5mm each
-};
+export const GRID_CONFIG: Record<KitSize, { cols: number; rows: number }> = PROCESSING_GRID_CONFIG;
 
 // ─── CIELAB Delta-E (CIE76) ────────────────────────────────────────────
 function deltaE(
@@ -540,7 +536,7 @@ export interface ProcessingResult {
 export async function processImage(
   imageSrc: string,
   cropData: { x: number; y: number; width: number; height: number },
-  kitSize: KitSize = "40x50",
+  kitSize: KitSize = resolveProcessingKitSize(DEFAULT_PUBLIC_KIT),
 ): Promise<ProcessingResult[]> {
   const { cols, rows } = GRID_CONFIG[kitSize];
 
@@ -636,3 +632,4 @@ export async function processImage(
     img.src = imageSrc;
   });
 }
+

@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useTranslation } from "@/i18n";
 import { GRID_CONFIG, type KitSize } from "@/lib/imageProcessing";
+import { PROCESSING_KIT_META } from "@/lib/kitCatalog";
 
 interface CropScreenProps {
   imageSrc: string;
@@ -20,32 +21,9 @@ interface CropScreenProps {
   onBack: () => void;
 }
 
-const ASPECT_RATIOS: Record<KitSize, number> = {
-  "40x50": 4 / 5,
-  "30x40": 3 / 4,
-  "A4": 21 / 29.7,
-  "A3": 29.7 / 42,
-  "A2": 42 / 59.4,
-};
-
-const KIT_LABELS: Record<KitSize, string> = {
-  "40x50": "40 × 50 cm",
-  "30x40": "30 × 40 cm",
-  "A4": "A4 (21 × 29,7 cm)",
-  "A3": "A3 (29,7 × 42 cm)",
-  "A2": "A2 (42 × 59,4 cm)",
-};
-
-const MIN_RESOLUTION: Record<KitSize, { w: number; h: number }> = {
-  "40x50": { w: 160, h: 200 },
-  "30x40": { w: 120, h: 160 },
-  "A4": { w: 84, h: 119 },
-  "A3": { w: 118, h: 168 },
-  "A2": { w: 168, h: 237 },
-};
-
 function getQualityInfo(w: number, h: number, kitSize: KitSize) {
-  const min = MIN_RESOLUTION[kitSize];
+  const meta = PROCESSING_KIT_META[kitSize];
+  const min = { w: meta.gridCols, h: meta.gridRows };
   if (w >= min.w * 4 && h >= min.h * 4)
     return { level: "excellent" as const, label: "Excellente qualité", percent: 100, color: "text-green-500", bgColor: "bg-green-500" };
   if (w >= min.w * 2 && h >= min.h * 2)
@@ -63,7 +41,8 @@ export function CropScreen({ imageSrc, kitSize, onCropComplete, onBack }: CropSc
   const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { t } = useTranslation();
 
-  const aspect = ASPECT_RATIOS[kitSize];
+  const kitMeta = PROCESSING_KIT_META[kitSize];
+  const aspect = kitMeta.aspectRatio;
   const gridConfig = GRID_CONFIG[kitSize];
 
   const onCropDone = useCallback((_: Area, croppedPixels: Area) => {
@@ -123,7 +102,7 @@ export function CropScreen({ imageSrc, kitSize, onCropComplete, onBack }: CropSc
             <ArrowLeft className="w-4 h-4" /> {t.studio.back}
           </button>
           <Badge variant="secondary" className="text-xs font-medium">
-            {KIT_LABELS[kitSize]} — {gridConfig.cols}×{gridConfig.rows} blocs
+            {kitMeta.label} — {gridConfig.cols}×{gridConfig.rows} blocs
           </Badge>
         </div>
 
@@ -297,3 +276,4 @@ export function CropScreen({ imageSrc, kitSize, onCropComplete, onBack }: CropSc
     </div>
   );
 }
+

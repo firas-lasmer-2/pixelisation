@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Navbar } from "@/components/shared/Navbar";
 import { Footer } from "@/components/landing/Footer";
 import { useTranslation } from "@/i18n";
-import { useOrder, SIZE_LABELS, getPhoto } from "@/lib/store";
+import { useOrder, getPhoto } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +28,7 @@ import {
   sanitizeDedicationText,
 } from "@/lib/dedicationOverlay";
 import { buildViewerUrl, BRAND } from "@/lib/brand";
+import { getKitConfig, resolveProcessingKitSize } from "@/lib/kitCatalog";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Download as DownloadIcon,
@@ -71,12 +72,9 @@ const Download = () => {
     }
   }, [order, navigate]);
 
-  const kitSize = order.selectedSize === "stamp_kit_40x50" ? "40x50"
-    : order.selectedSize === "stamp_kit_A4" ? "A4"
-    : order.selectedSize === "stamp_kit_A3" ? "A3"
-    : order.selectedSize === "stamp_kit_A2" ? "A2"
-    : "30x40";
-  const canvasLabel = order.selectedSize ? SIZE_LABELS[order.selectedSize] : "";
+  const selectedKit = order.selectedSize ? getKitConfig(order.selectedSize) : null;
+  const kitSize = resolveProcessingKitSize(order.selectedSize);
+  const canvasLabel = selectedKit?.displayLabel || "";
   const viewerPath = order.instructionCode ? buildViewerUrl(order.instructionCode, window.location.origin).replace(window.location.origin, "") : "";
   const sanitizedSavedDedication = useMemo(() => sanitizeDedicationText(order.dedicationText), [order.dedicationText]);
   const sanitizedDraftDedication = useMemo(() => sanitizeDedicationText(dedicationDraft), [dedicationDraft]);
@@ -99,7 +97,7 @@ const Download = () => {
       height: Math.round(order.croppedArea!.height),
     };
 
-    const results = await processImage(sourceForProcessing, cropData, kitSize as "40x50" | "30x40" | "A4");
+    const results = await processImage(sourceForProcessing, cropData, kitSize);
     const selectedResult = results.find((result) => result.styleKey === orderStyleToPaletteKey(order.selectedStyle!)) || results[0];
     setProcessingResult(selectedResult);
     return selectedResult;
@@ -635,3 +633,4 @@ const Download = () => {
 };
 
 export default Download;
+

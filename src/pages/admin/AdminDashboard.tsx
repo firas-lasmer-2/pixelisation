@@ -9,19 +9,12 @@ import { CategoryChart } from "@/components/admin/CategoryChart";
 import { ConversionFunnel } from "@/components/admin/ConversionFunnel";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { getKitDisplayLabel } from "@/lib/kitCatalog";
 import type { Database } from "@/integrations/supabase/types";
 
 type Order = Database["public"]["Tables"]["orders"]["Row"];
 type AbandonedCart = Database["public"]["Tables"]["abandoned_carts"]["Row"];
 type FunnelEvent = Database["public"]["Tables"]["funnel_events"]["Row"];
-
-const SIZE_LABELS: Record<string, string> = {
-  stamp_kit_40x50: "40×50 cm",
-  stamp_kit_30x40: "30×40 cm",
-  stamp_kit_A4: "A4",
-  stamp_kit_A3: "A3",
-  stamp_kit_A2: "A2",
-};
 
 export default function AdminDashboard() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -93,7 +86,7 @@ export default function AdminDashboard() {
     return acc;
   }, {});
   const sizeData = Object.entries(sizeCounts)
-    .map(([key, v]) => ({ size: SIZE_LABELS[key] || key, count: v.count, revenue: v.revenue }))
+    .map(([key, v]) => ({ size: getKitDisplayLabel(key) || key, count: v.count, revenue: v.revenue }))
     .sort((a, b) => b.count - a.count);
 
   // Category data

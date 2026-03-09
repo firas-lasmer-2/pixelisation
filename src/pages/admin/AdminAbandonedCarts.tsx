@@ -8,6 +8,7 @@ import { ShoppingCart, Clock, Phone, Mail, AlertTriangle, Send, Copy, Loader2 } 
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
+import { getKitDisplayLabel } from "@/lib/kitCatalog";
 
 interface AbandonedCart {
   id: string;
@@ -174,7 +175,7 @@ const AdminAbandonedCarts = () => {
                       </Badge>
                       {cart.kit_size && (
                         <Badge variant="secondary" className="text-[10px]">
-                          {cart.kit_size.replace("stamp_kit_", "")}
+                          {getKitDisplayLabel(cart.kit_size)}
                         </Badge>
                       )}
                     </div>

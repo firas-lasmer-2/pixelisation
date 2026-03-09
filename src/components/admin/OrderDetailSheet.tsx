@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { getKitDisplayLabel } from "@/lib/kitCatalog";
 import { CheckCircle, Package, Truck, MapPin, User, Mail, Phone, MapPinned, Loader2, History, ImageIcon } from "lucide-react";
 import type { Database } from "@/integrations/supabase/types";
 
@@ -230,7 +231,7 @@ export function OrderDetailSheet({ order, open, onOpenChange, onStatusUpdated }:
           <div className="space-y-2">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Kit Details</p>
             <div className="grid grid-cols-2 gap-2 text-sm">
-              <div><span className="text-muted-foreground">Size:</span> <span className="font-medium">{order.kit_size}</span></div>
+              <div><span className="text-muted-foreground">Size:</span> <span className="font-medium">{getKitDisplayLabel(order.kit_size)}</span></div>
               <div><span className="text-muted-foreground">Style:</span> <span className="font-medium">{order.art_style}</span></div>
               <div><span className="text-muted-foreground">Price:</span> <span className="font-medium">{order.total_price} DT</span></div>
               <div><span className="text-muted-foreground">Gift:</span> <span className="font-medium">{order.is_gift ? "Yes" : "No"}</span></div>
