@@ -1,53 +1,75 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useCallback, useEffect, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { Navbar } from "@/components/shared/Navbar";
 import { Footer } from "@/components/landing/Footer";
 import { useTranslation } from "@/i18n";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { CheckCircle, Package, Truck, Home, Search, MapPin } from "lucide-react";
+import { CheckCircle, Package, Truck, Home, Search, MapPin, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { RegenerationRequestForm } from "@/components/shared/RegenerationRequestForm";
 import type { Database } from "@/integrations/supabase/types";
 
 type OrderStatus = Database["public"]["Enums"]["order_status"];
+type TrackHistoryEvent = Pick<
+  Database["public"]["Tables"]["order_status_events"]["Row"],
+  "status" | "tracking_number" | "courier_name" | "note" | "source" | "created_at"
+>;
+type TrackOrderResult = {
+  status: OrderStatus;
+  category: string | null;
+  courierName: string | null;
+  trackingNumber: string | null;
+  fulfillmentNote: string | null;
+  history: TrackHistoryEvent[];
+};
 
 const TIMELINE_ICONS = [CheckCircle, Package, Truck, MapPin];
 const STATUS_ORDER: OrderStatus[] = ["confirmed", "processing", "shipped", "delivered"];
 
 const Track = () => {
   const { t } = useTranslation();
-  const [ref, setRef] = useState("");
+  const [searchParams] = useSearchParams();
+  const [ref, setRef] = useState(searchParams.get("ref")?.toUpperCase() || "");
+  const [instructionCode, setInstructionCode] = useState(searchParams.get("code")?.toUpperCase() || "");
   const [searched, setSearched] = useState(false);
   const [found, setFound] = useState(false);
-  const [orderStatus, setOrderStatus] = useState<OrderStatus>("confirmed");
-  const [orderCategory, setOrderCategory] = useState<string | null>(null);
+  const [trackResult, setTrackResult] = useState<TrackOrderResult | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const handleSearch = async () => {
+  const handleSearch = useCallback(async (nextRef = ref, nextInstructionCode = instructionCode) => {
     setSearched(true);
     setLoading(true);
-    const { data } = await supabase
-      .from("orders")
-      .select("status, category")
-      .eq("order_ref", ref.toUpperCase())
-      .maybeSingle();
-    
-    if (data) {
+
+    const { data, error } = await supabase.functions.invoke("track-order", {
+      body: {
+        orderRef: nextRef.toUpperCase(),
+        instructionCode: nextInstructionCode.toUpperCase(),
+      },
+    });
+
+    if (!error && data && !data.error) {
       setFound(true);
-      setOrderStatus(data.status);
-      setOrderCategory(data.category);
+      setTrackResult(data as TrackOrderResult);
     } else {
       setFound(false);
+      setTrackResult(null);
     }
     setLoading(false);
-  };
+  }, [instructionCode, ref]);
+
+  useEffect(() => {
+    if (ref && instructionCode && !searched) {
+      handleSearch(ref, instructionCode);
+    }
+  }, [ref, instructionCode, searched, handleSearch]);
 
   const statuses = STATUS_ORDER.map((key, i) => ({
     key,
     icon: TIMELINE_ICONS[i],
-    active: STATUS_ORDER.indexOf(orderStatus) >= i,
+    active: STATUS_ORDER.indexOf(trackResult?.status || "confirmed") >= i,
   }));
 
   return (
@@ -61,20 +83,27 @@ const Track = () => {
                 <Truck className="h-8 w-8 text-primary" />
               </div>
               <h1 className="text-3xl font-bold mb-2">{t.track.title}</h1>
-              <p className="text-muted-foreground">{t.track.subtitle}</p>
+              <p className="text-muted-foreground">{(t.track as any).subtitleSecure || t.track.subtitle}</p>
             </div>
 
             {/* Search form */}
-            <div className="flex gap-3 mb-8">
+            <div className="grid gap-3 mb-8 sm:grid-cols-[1fr_1fr_auto]">
               <Input
                 value={ref}
-                onChange={(e) => setRef(e.target.value)}
+                onChange={(e) => setRef(e.target.value.toUpperCase())}
                 placeholder={t.track.placeholder}
                 className="font-mono text-lg"
                 onKeyDown={(e) => e.key === "Enter" && handleSearch()}
               />
-              <Button onClick={handleSearch} className="shrink-0 gap-2">
-                <Search className="h-4 w-4" />
+              <Input
+                value={instructionCode}
+                onChange={(e) => setInstructionCode(e.target.value.toUpperCase())}
+                placeholder={(t.track as any).instructionPlaceholder || "Code de suivi"}
+                className="font-mono text-lg"
+                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              />
+              <Button onClick={() => handleSearch()} className="shrink-0 gap-2" disabled={!ref || !instructionCode || loading}>
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                 {t.track.searchBtn}
               </Button>
             </div>
@@ -91,9 +120,24 @@ const Track = () => {
               <Card className="animate-fade-in overflow-hidden">
                 <div className="bg-primary/5 px-6 py-4 border-b border-border">
                   <h2 className="font-semibold">{t.track.statusTitle}</h2>
-                  <p className="text-xs text-muted-foreground font-mono mt-1">{ref.toUpperCase()}</p>
+                  <p className="text-xs text-muted-foreground font-mono mt-1">{ref.toUpperCase()} · {instructionCode.toUpperCase()}</p>
                 </div>
                 <CardContent className="p-6">
+                  <div className="mb-6 grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-lg border bg-muted/30 p-3">
+                      <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">Transporteur</p>
+                      <p className="mt-1 text-sm font-medium">{trackResult?.courierName || "En attente"}</p>
+                    </div>
+                    <div className="rounded-lg border bg-muted/30 p-3">
+                      <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">N° suivi</p>
+                      <p className="mt-1 text-sm font-medium font-mono">{trackResult?.trackingNumber || "Pas encore attribué"}</p>
+                    </div>
+                    <div className="rounded-lg border bg-muted/30 p-3">
+                      <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">Dernière note</p>
+                      <p className="mt-1 text-sm font-medium">{trackResult?.fulfillmentNote || "Aucune note logistique"}</p>
+                    </div>
+                  </div>
+
                   <div className="relative">
                     {/* Vertical line */}
                     <div className="absolute left-5 top-0 bottom-0 w-0.5 bg-border" />
@@ -124,13 +168,34 @@ const Track = () => {
                       })}
                     </div>
                   </div>
+
+                  {trackResult?.history?.length ? (
+                    <div className="mt-8 space-y-3">
+                      <h3 className="text-sm font-semibold">Historique détaillé</h3>
+                      {trackResult.history.map((entry, index) => (
+                        <div key={`${entry.created_at}-${index}`} className="rounded-lg border p-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <Badge variant="outline">{t.track.statuses[entry.status]}</Badge>
+                            <span className="text-xs text-muted-foreground">{new Date(entry.created_at).toLocaleString()}</span>
+                          </div>
+                          {(entry.courier_name || entry.tracking_number || entry.note) && (
+                            <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                              {entry.courier_name && <p>Transporteur: {entry.courier_name}</p>}
+                              {entry.tracking_number && <p>Suivi: {entry.tracking_number}</p>}
+                              {entry.note && <p>Note: {entry.note}</p>}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                 </CardContent>
               </Card>
             )}
 
             {/* Regeneration request for AI categories */}
-            {searched && found && orderCategory && ["family", "kids_dream", "pet"].includes(orderCategory) && (
-              <RegenerationRequestForm orderRef={ref.toUpperCase()} className="mt-6" />
+            {searched && found && trackResult?.category && ["family", "kids_dream", "pet"].includes(trackResult.category) && (
+              <RegenerationRequestForm orderRef={ref.toUpperCase()} instructionCode={instructionCode.toUpperCase()} className="mt-6" />
             )}
 
             <div className="mt-8 text-center">

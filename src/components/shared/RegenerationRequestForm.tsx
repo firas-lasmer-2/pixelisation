@@ -8,23 +8,25 @@ import { supabase } from "@/integrations/supabase/client";
 
 interface Props {
   orderRef?: string;
+  instructionCode?: string;
   className?: string;
 }
 
-export function RegenerationRequestForm({ orderRef: initialRef, className }: Props) {
+export function RegenerationRequestForm({ orderRef: initialRef, instructionCode: initialInstructionCode, className }: Props) {
   const [orderRef, setOrderRef] = useState(initialRef || "");
+  const [instructionCode, setInstructionCode] = useState(initialInstructionCode || "");
   const [reason, setReason] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
   const [remaining, setRemaining] = useState<number | null>(null);
 
   const handleSubmit = async () => {
-    if (!orderRef || reason.trim().length < 5) return;
+    if (!orderRef || !instructionCode || reason.trim().length < 5) return;
     setStatus("loading");
 
     try {
       const { data, error } = await supabase.functions.invoke("regeneration-request", {
-        body: { order_ref: orderRef, reason },
+        body: { order_ref: orderRef, instruction_code: instructionCode, reason },
       });
 
       if (error) throw new Error(error.message);
@@ -73,10 +75,27 @@ export function RegenerationRequestForm({ orderRef: initialRef, className }: Pro
         </p>
 
         {!initialRef && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Input
+              value={orderRef}
+              onChange={(e) => setOrderRef(e.target.value.toUpperCase())}
+              placeholder="Référence de commande (HL-XXXXXX)"
+              className="font-mono"
+            />
+            <Input
+              value={instructionCode}
+              onChange={(e) => setInstructionCode(e.target.value.toUpperCase())}
+              placeholder="Code de suivi"
+              className="font-mono"
+            />
+          </div>
+        )}
+
+        {initialRef && !initialInstructionCode && (
           <Input
-            value={orderRef}
-            onChange={(e) => setOrderRef(e.target.value)}
-            placeholder="Référence de commande (FK-XXXXXX)"
+            value={instructionCode}
+            onChange={(e) => setInstructionCode(e.target.value.toUpperCase())}
+            placeholder="Code de suivi"
             className="font-mono"
           />
         )}
@@ -98,7 +117,7 @@ export function RegenerationRequestForm({ orderRef: initialRef, className }: Pro
 
         <Button
           onClick={handleSubmit}
-          disabled={status === "loading" || reason.trim().length < 5 || !orderRef}
+          disabled={status === "loading" || reason.trim().length < 5 || !orderRef || !instructionCode}
           className="w-full"
           size="sm"
         >

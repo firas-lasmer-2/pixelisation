@@ -22,9 +22,15 @@ export type Database = {
           contact_first_name: string | null
           contact_phone: string | null
           created_at: string
+          dream_job: string | null
           id: string
           kit_size: string | null
+          last_recovery_sent_at: string | null
+          last_recovery_status: string | null
           photo_uploaded: boolean
+          recovered_order_ref: string | null
+          recovery_attempts: number
+          recovery_channel: string | null
           recovered: boolean
           session_id: string
           step_reached: number
@@ -37,9 +43,15 @@ export type Database = {
           contact_first_name?: string | null
           contact_phone?: string | null
           created_at?: string
+          dream_job?: string | null
           id?: string
           kit_size?: string | null
+          last_recovery_sent_at?: string | null
+          last_recovery_status?: string | null
           photo_uploaded?: boolean
+          recovered_order_ref?: string | null
+          recovery_attempts?: number
+          recovery_channel?: string | null
           recovered?: boolean
           session_id: string
           step_reached?: number
@@ -52,15 +64,77 @@ export type Database = {
           contact_first_name?: string | null
           contact_phone?: string | null
           created_at?: string
+          dream_job?: string | null
           id?: string
           kit_size?: string | null
+          last_recovery_sent_at?: string | null
+          last_recovery_status?: string | null
           photo_uploaded?: boolean
+          recovered_order_ref?: string | null
+          recovery_attempts?: number
+          recovery_channel?: string | null
           recovered?: boolean
           session_id?: string
           step_reached?: number
           updated_at?: string
         }
         Relationships: []
+      }
+      ai_generation_runs: {
+        Row: {
+          category: string
+          created_at: string
+          dream_job: string | null
+          error_message: string | null
+          id: string
+          metadata: Json
+          model: string
+          order_id: string | null
+          provider: string
+          requested_by: string
+          result_image_url: string | null
+          session_id: string | null
+          source_image_urls: Json
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          dream_job?: string | null
+          error_message?: string | null
+          id?: string
+          metadata?: Json
+          model: string
+          order_id?: string | null
+          provider?: string
+          requested_by?: string
+          result_image_url?: string | null
+          session_id?: string | null
+          source_image_urls?: Json
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          dream_job?: string | null
+          error_message?: string | null
+          id?: string
+          metadata?: Json
+          model?: string
+          order_id?: string | null
+          provider?: string
+          requested_by?: string
+          result_image_url?: string | null
+          session_id?: string | null
+          source_image_urls?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_generation_runs_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       coupons: {
         Row: {
@@ -101,6 +175,39 @@ export type Database = {
         }
         Relationships: []
       }
+      funnel_events: {
+        Row: {
+          category: string | null
+          created_at: string
+          event_name: string
+          id: string
+          metadata: Json
+          order_ref: string | null
+          session_id: string
+          step: number | null
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          event_name: string
+          id?: string
+          metadata?: Json
+          order_ref?: string | null
+          session_id: string
+          step?: number | null
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          event_name?: string
+          id?: string
+          metadata?: Json
+          order_ref?: string | null
+          session_id?: string
+          step?: number | null
+        }
+        Relationships: []
+      }
       orders: {
         Row: {
           art_style: string
@@ -109,11 +216,14 @@ export type Database = {
           contact_first_name: string
           contact_last_name: string
           contact_phone: string
+          courier_name: string | null
           coupon_code: string | null
           created_at: string
           cropped_preview_url: string | null
+          delivered_at: string | null
           discount_amount: number
           dream_job: string | null
+          fulfillment_note: string | null
           gift_message: string | null
           id: string
           instruction_code: string
@@ -121,12 +231,14 @@ export type Database = {
           kit_size: string
           order_ref: string
           photo_url: string | null
+          shipped_at: string | null
           shipping_address: string
           shipping_city: string
           shipping_governorate: string
           shipping_postal_code: string | null
           status: Database["public"]["Enums"]["order_status"]
           total_price: number
+          tracking_number: string | null
           updated_at: string
         }
         Insert: {
@@ -136,11 +248,14 @@ export type Database = {
           contact_first_name: string
           contact_last_name: string
           contact_phone: string
+          courier_name?: string | null
           coupon_code?: string | null
           created_at?: string
           cropped_preview_url?: string | null
+          delivered_at?: string | null
           discount_amount?: number
           dream_job?: string | null
+          fulfillment_note?: string | null
           gift_message?: string | null
           id?: string
           instruction_code: string
@@ -148,12 +263,14 @@ export type Database = {
           kit_size: string
           order_ref: string
           photo_url?: string | null
+          shipped_at?: string | null
           shipping_address: string
           shipping_city: string
           shipping_governorate: string
           shipping_postal_code?: string | null
           status?: Database["public"]["Enums"]["order_status"]
           total_price: number
+          tracking_number?: string | null
           updated_at?: string
         }
         Update: {
@@ -163,11 +280,14 @@ export type Database = {
           contact_first_name?: string
           contact_last_name?: string
           contact_phone?: string
+          courier_name?: string | null
           coupon_code?: string | null
           created_at?: string
           cropped_preview_url?: string | null
+          delivered_at?: string | null
           discount_amount?: number
           dream_job?: string | null
+          fulfillment_note?: string | null
           gift_message?: string | null
           id?: string
           instruction_code?: string
@@ -175,15 +295,106 @@ export type Database = {
           kit_size?: string
           order_ref?: string
           photo_url?: string | null
+          shipped_at?: string | null
           shipping_address?: string
           shipping_city?: string
           shipping_governorate?: string
           shipping_postal_code?: string | null
           status?: Database["public"]["Enums"]["order_status"]
           total_price?: number
+          tracking_number?: string | null
           updated_at?: string
         }
         Relationships: []
+      }
+      order_assets: {
+        Row: {
+          asset_kind: string
+          created_at: string
+          generation_run_id: string | null
+          id: string
+          label: string | null
+          metadata: Json
+          order_id: string
+          url: string
+        }
+        Insert: {
+          asset_kind: string
+          created_at?: string
+          generation_run_id?: string | null
+          id?: string
+          label?: string | null
+          metadata?: Json
+          order_id: string
+          url: string
+        }
+        Update: {
+          asset_kind?: string
+          created_at?: string
+          generation_run_id?: string | null
+          id?: string
+          label?: string | null
+          metadata?: Json
+          order_id?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_assets_generation_run_id_fkey"
+            columns: ["generation_run_id"]
+            isOneToOne: false
+            referencedRelation: "ai_generation_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_assets_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      order_status_events: {
+        Row: {
+          courier_name: string | null
+          created_at: string
+          id: string
+          note: string | null
+          order_id: string
+          source: string
+          status: Database["public"]["Enums"]["order_status"]
+          tracking_number: string | null
+        }
+        Insert: {
+          courier_name?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          order_id: string
+          source?: string
+          status: Database["public"]["Enums"]["order_status"]
+          tracking_number?: string | null
+        }
+        Update: {
+          courier_name?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          order_id?: string
+          source?: string
+          status?: Database["public"]["Enums"]["order_status"]
+          tracking_number?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_status_events_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       regeneration_requests: {
         Row: {

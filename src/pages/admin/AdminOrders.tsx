@@ -53,7 +53,7 @@ function exportCSV(orders: Order[]) {
 function printShippingLabels(orders: Order[]) {
   const labelHtml = orders.map((o) => `
     <div style="page-break-after:always;padding:24px;font-family:Arial,sans-serif;border:2px solid #333;margin:12px;width:380px;height:260px;box-sizing:border-box;">
-      <div style="font-size:10px;color:#888;margin-bottom:8px;text-transform:uppercase;letter-spacing:1px;">Flink Atelier — Shipping Label</div>
+      <div style="font-size:10px;color:#888;margin-bottom:8px;text-transform:uppercase;letter-spacing:1px;">Helma — Shipping Label</div>
       <div style="font-size:18px;font-weight:bold;margin-bottom:12px;font-family:monospace;">${o.order_ref}</div>
       <div style="font-size:14px;font-weight:bold;margin-bottom:4px;">${o.contact_first_name} ${o.contact_last_name}</div>
       <div style="font-size:13px;margin-bottom:2px;">${o.shipping_address}</div>

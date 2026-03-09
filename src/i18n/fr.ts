@@ -157,13 +157,13 @@ export const fr = {
     },
     contact: {
       title: "Contact",
-      email: "contact@flinkatelier.com",
+      email: "contact@helma.tn",
     },
     legal: {
       privacy: "Politique de confidentialité",
       terms: "Conditions générales",
     },
-    copyright: "© 2025 Flink Atelier. Tous droits réservés.",
+    copyright: "© 2026 Helma. Tous droits réservés.",
     trustBadges: {
       freeShipping: "Livraison gratuite",
       cod: "Paiement à la livraison",
@@ -331,7 +331,7 @@ export const fr = {
       "Page de légende des couleurs avec pourcentages et carte des sections",
       "Grille agrandie (1 section par page) pour une lecture maximale",
       "Position mini-carte sur chaque section",
-      "Page finale avec conseils de peinture et QR code scannable",
+      "Page finale avec conseils de peinture et lien vers Helma",
     ],
     backToOrder: "Retour à la commande",
     backHome: "Accueil",
@@ -365,9 +365,11 @@ export const fr = {
   track: {
     title: "Suivre ma commande",
     subtitle: "Entrez votre référence de commande pour voir l'état de votre livraison.",
-    placeholder: "FK-XXXXXX",
+    subtitleSecure: "Entrez votre référence de commande et votre code de suivi pour voir l'état de votre livraison.",
+    placeholder: "HL-XXXXXX",
+    instructionPlaceholder: "Code de suivi",
     searchBtn: "Rechercher",
-    notFound: "Aucune commande trouvée avec cette référence.",
+    notFound: "Aucune commande trouvée avec cette combinaison de référence et de code.",
     statusTitle: "État de votre commande",
     statuses: {
       confirmed: "Commande confirmée",

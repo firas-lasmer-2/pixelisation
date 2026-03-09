@@ -1,45 +1,17 @@
-import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Navbar } from "@/components/shared/Navbar";
 import { Footer } from "@/components/landing/Footer";
 import { useTranslation } from "@/i18n";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Sparkles } from "lucide-react";
-
-type FilterStyle = "all" | "original" | "vintage" | "pop_art";
-
-// Placeholder gallery items using existing images
-const GALLERY_ITEMS = [
-  { id: 1, image: "/images/style-original.jpg", style: "original" as const, size: "40 × 50 cm" },
-  { id: 2, image: "/images/style-vintage.jpg", style: "vintage" as const, size: "30 × 40 cm" },
-  { id: 3, image: "/images/style-popart.jpg", style: "pop_art" as const, size: "40 × 50 cm" },
-  { id: 4, image: "/images/hero-kit.jpg", style: "original" as const, size: "30 × 40 cm" },
-  { id: 5, image: "/images/kit-flatlay.jpg", style: "vintage" as const, size: "40 × 50 cm" },
-  { id: 6, image: "/images/step-result.jpg", style: "pop_art" as const, size: "30 × 40 cm" },
-];
+import { Card, CardContent } from "@/components/ui/card";
+import { Camera, Sparkles } from "lucide-react";
 
 const Gallery = () => {
   const { t } = useTranslation();
-  const [filter, setFilter] = useState<FilterStyle>("all");
-
-  const filtered = filter === "all"
-    ? GALLERY_ITEMS
-    : GALLERY_ITEMS.filter((item) => item.style === filter);
-
-  const getStyleName = (style: string) => {
-    if (style === "original") return t.styles.original.name;
-    if (style === "vintage") return t.styles.vintage.name;
-    return t.styles.popArt.name;
-  };
-
-  const filters: { key: FilterStyle; label: string }[] = [
-    { key: "all", label: t.gallery.filterAll },
-    { key: "original", label: t.gallery.filterOriginal },
-    { key: "vintage", label: t.gallery.filterVintage },
-    { key: "pop_art", label: t.gallery.filterPopArt },
-  ];
+  const comingSoonTitle = t.lang === "ar" ? "معرض العملاء الحقيقي قريباً" : "La galerie clients arrive bientôt";
+  const comingSoonBody = t.lang === "ar"
+    ? "سننشر فقط الأعمال الحقيقية التي يوافق أصحابها على مشاركتها. حتى ذلك الحين، يمكنك إنشاء طلبك مباشرة من الاستوديو."
+    : "Nous publierons uniquement de vraies créations clients avec leur accord. En attendant, lancez votre commande directement depuis le studio.";
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -49,50 +21,25 @@ const Gallery = () => {
           {/* Header */}
           <div className="text-center mb-12 max-w-2xl mx-auto">
             <h1 className="text-4xl font-bold mb-3">{t.gallery.title}</h1>
-            <p className="text-lg text-muted-foreground">{t.gallery.subtitle}</p>
+            <p className="text-lg text-muted-foreground">{comingSoonBody}</p>
           </div>
 
-          {/* Filter tabs */}
-          <div className="flex justify-center gap-2 mb-10 flex-wrap">
-            {filters.map((f) => (
-              <Button
-                key={f.key}
-                variant={filter === f.key ? "default" : "outline"}
-                size="sm"
-                className="rounded-full px-5"
-                onClick={() => setFilter(f.key)}
-              >
-                {f.label}
-              </Button>
-            ))}
-          </div>
-
-          {/* Gallery grid */}
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 max-w-5xl mx-auto">
-            {filtered.map((item, i) => (
-              <Card
-                key={item.id}
-                className="group overflow-hidden cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
-                style={{ animationDelay: `${i * 100}ms` }}
-              >
-                <div className="aspect-square overflow-hidden relative">
-                  <img
-                    src={item.image}
-                    alt={`Gallery ${item.id}`}
-                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
-                  />
-                  <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-foreground/70 to-transparent p-4">
-                    <div className="flex items-center justify-between">
-                      <Badge variant="secondary" className="bg-background/80 backdrop-blur-sm text-foreground text-xs">
-                        {getStyleName(item.style)}
-                      </Badge>
-                      <span className="text-xs text-primary-foreground/80">{item.size}</span>
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
+          <Card className="mx-auto max-w-3xl border-primary/20">
+            <CardContent className="flex flex-col items-center gap-5 p-10 text-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+                <Camera className="h-8 w-8 text-primary" />
+              </div>
+              <div className="space-y-2">
+                <h2 className="text-2xl font-semibold">{comingSoonTitle}</h2>
+                <p className="text-sm text-muted-foreground max-w-xl">{comingSoonBody}</p>
+              </div>
+              <img
+                src="/images/step-result.jpg"
+                alt="Helma preview"
+                className="w-full max-w-md rounded-2xl border border-border object-cover shadow-lg"
+              />
+            </CardContent>
+          </Card>
 
           {/* CTA */}
           <div className="text-center mt-16">

@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Stamp, LogIn, AlertCircle } from "lucide-react";
+import { BRAND } from "@/lib/brand";
 
 export default function AdminLogin() {
   const navigate = useNavigate();
@@ -43,7 +44,7 @@ export default function AdminLogin() {
             <Stamp className="h-7 w-7 text-primary-foreground" />
           </div>
           <h1 className="text-2xl font-bold" style={{ fontFamily: "'Playfair Display', serif" }}>
-            Flink Admin
+            {BRAND.adminName}
           </h1>
           <p className="text-sm text-muted-foreground mt-1">Sign in to manage orders</p>
         </div>
@@ -65,7 +66,7 @@ export default function AdminLogin() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@flink.tn"
+                  placeholder="admin@helma.tn"
                   required
                   autoComplete="email"
                 />

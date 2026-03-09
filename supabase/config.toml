@@ -3,8 +3,20 @@ project_id = "aepyerecwdgoyotnpxer"
 [functions.generate-creative]
 verify_jwt = false
 
+[functions.create-order]
+verify_jwt = false
+
 [functions.send-order-email]
 verify_jwt = false
 
 [functions.regeneration-request]
+verify_jwt = false
+
+[functions.track-order]
+verify_jwt = false
+
+[functions.send-cart-recovery]
+verify_jwt = false
+
+[functions.recover-cart]
 verify_jwt = false

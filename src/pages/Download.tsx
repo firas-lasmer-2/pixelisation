@@ -25,6 +25,7 @@ import {
   Image as ImageIcon,
   Share2,
 } from "lucide-react";
+import { BRAND, STORAGE_KEYS } from "@/lib/brand";
 
 const Download = () => {
   const { t } = useTranslation();
@@ -51,7 +52,7 @@ const Download = () => {
   const gridConfig = GRID_CONFIG[kitSize as "40x50" | "30x40" | "A4"];
   const stats = getSectionStats(gridConfig.cols, gridConfig.rows);
 
-  const VIEWER_STORAGE_PREFIX = "flink-viewer-data-";
+  const VIEWER_STORAGE_PREFIX = STORAGE_KEYS.viewerDataPrefix;
 
   const processIfNeeded = async (): Promise<ProcessingResult> => {
     if (processingResult) return processingResult;
@@ -65,7 +66,7 @@ const Download = () => {
     const result = results.find(r => r.styleKey === order.selectedStyle) || results[0];
     setProcessingResult(result);
 
-    // Persist to localStorage for QR-based viewer access
+    // Persist to localStorage so the interactive viewer remains available on this browser
     if (order.instructionCode) {
       try {
         const viewerData = {
@@ -109,7 +110,7 @@ const Download = () => {
         palette: result.palette,
         previewDataUrl: result.dataUrl,
         canvasSize: kitSize === "40x50" ? "40×50" : kitSize === "A4" ? "A4 (21×30)" : "30×40",
-        brandName: "FLINK ATELIER",
+        brandName: BRAND.pdfName,
         instructionCode: order.instructionCode || undefined,
       });
       setProgress(100);
@@ -147,7 +148,7 @@ const Download = () => {
     const url = URL.createObjectURL(pdfBlob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `flink-atelier-${order.orderRef || "portrait"}-instructions.pdf`;
+    a.download = `helma-${order.orderRef || "portrait"}-instructions.pdf`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -157,12 +158,12 @@ const Download = () => {
     try {
       if (navigator.share) {
         const blob = await fetch(processingResult.dataUrl).then(r => r.blob());
-        const file = new File([blob], "flink-atelier-preview.png", { type: "image/png" });
+        const file = new File([blob], "helma-preview.png", { type: "image/png" });
         await navigator.share({ title: "My Paint by Numbers", files: [file] });
       } else {
         const link = document.createElement("a");
         link.href = processingResult.dataUrl;
-        link.download = "flink-atelier-preview.png";
+        link.download = "helma-preview.png";
         link.click();
       }
     } catch (e) { /* user cancelled */ }
@@ -348,7 +349,7 @@ const Download = () => {
                             {dl.shareBtn}
                           </Button>
                           <Button variant="outline" size="sm" asChild className="gap-2">
-                            <a href={processingResult.dataUrl} download="flink-preview.png">
+                            <a href={processingResult.dataUrl} download="helma-preview.png">
                               <DownloadIcon className="h-4 w-4" />
                               {dl.saveImageBtn}
                             </a>

@@ -2,6 +2,7 @@ import jsPDF from "jspdf";
 import QRCode from "qrcode";
 import { PaletteColor, StylePalette, COLOR_LETTERS } from "./palettes";
 import { renderPixelGrid, renderSmoothPreview } from "./imageProcessing";
+import { BRAND as BRAND_CONFIG } from "./brand";
 
 // ─── Section dimensions (Qbrix-style: 9 cols × 13 rows) ────────────────
 const SECTION_COLS = 9;
@@ -131,7 +132,7 @@ function renderPageFooter(doc: jsPDF, pageNum: number, totalPages: number) {
   doc.setFontSize(7);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(...BRAND.warmGray);
-  doc.text("flinkatelier.com", 14, pageH - 6);
+  doc.text(BRAND_CONFIG.domain, 14, pageH - 6);
   doc.setTextColor(...BRAND.gold);
   doc.text(`${pageNum} / ${totalPages}`, pageW / 2, pageH - 6, { align: "center" });
   doc.setTextColor(...BRAND.warmGray);
@@ -168,7 +169,7 @@ function drawPremiumBorder(doc: jsPDF, margin: number) {
 function renderCoverPage(doc: jsPDF, options: PdfOptions, colorCounts: number[], totalPages: number) {
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
-  const { palette, canvasSize, brandName = "FLINK ATELIER" } = options;
+  const { palette, canvasSize, brandName = BRAND_CONFIG.pdfName } = options;
 
   doc.setFillColor(...BRAND.cream);
   doc.rect(0, 0, pageW, pageH, "F");
@@ -265,7 +266,7 @@ function renderCoverPage(doc: jsPDF, options: PdfOptions, colorCounts: number[],
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7);
   doc.setTextColor(...BRAND.warmGray);
-  doc.text("flinkatelier.com — Custom Paint by Numbers", pageW / 2, pageH - 14, { align: "center" });
+  doc.text(`${BRAND_CONFIG.domain} — Custom Paint by Numbers`, pageW / 2, pageH - 14, { align: "center" });
 
   renderPageFooter(doc, 1, totalPages);
 }
@@ -273,7 +274,7 @@ function renderCoverPage(doc: jsPDF, options: PdfOptions, colorCounts: number[],
 // ─── Page 2: Color Legend + Section Map ─────────────────────────────────
 function renderLegendPage(doc: jsPDF, options: PdfOptions, colorCounts: number[], totalPages: number) {
   const pageW = doc.internal.pageSize.getWidth();
-  const { palette, brandName = "FLINK ATELIER" } = options;
+  const { palette, brandName = BRAND_CONFIG.pdfName } = options;
 
   doc.addPage();
   doc.setFillColor(...BRAND.cream);
@@ -543,7 +544,7 @@ function renderMiniSection(
 
 // ─── Grid Pages: 12 sections per page (3×4 layout) ─────────────────────
 function renderGridPages(doc: jsPDF, options: PdfOptions, totalPages: number) {
-  const { indices, gridCols, gridRows, palette, brandName = "FLINK ATELIER" } = options;
+  const { indices, gridCols, gridRows, palette, brandName = BRAND_CONFIG.pdfName } = options;
 
   const sectionCols = Math.ceil(gridCols / SECTION_COLS);
   const sectionRows = Math.ceil(gridRows / SECTION_ROWS);
@@ -604,7 +605,7 @@ function renderGridPages(doc: jsPDF, options: PdfOptions, totalPages: number) {
 async function renderAssemblyPage(doc: jsPDF, options: PdfOptions, totalPages: number) {
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
-  const { palette, brandName = "FLINK ATELIER" } = options;
+  const { palette, brandName = BRAND_CONFIG.pdfName } = options;
 
   doc.addPage();
   doc.setFillColor(...BRAND.cream);
@@ -700,11 +701,8 @@ async function renderAssemblyPage(doc: jsPDF, options: PdfOptions, totalPages: n
   y += boxH;
 
   // QR Code
-  const qrUrl = options.instructionCode
-    ? `${typeof window !== "undefined" ? window.location.origin : "https://flinkatelier.com"}/viewer/${options.instructionCode}`
-    : "https://flinkatelier.com";
-
-  const qrLabel = options.instructionCode ? "Scan for Interactive Viewer" : "Visit Us Online";
+  const qrUrl = BRAND_CONFIG.siteUrl;
+  const qrLabel = "Visit Helma Online";
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
@@ -730,7 +728,7 @@ async function renderAssemblyPage(doc: jsPDF, options: PdfOptions, totalPages: n
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   doc.setTextColor(...BRAND.gold);
-  doc.text(options.instructionCode ? qrUrl : "flinkatelier.com", pageW / 2, y, { align: "center" });
+  doc.text(BRAND_CONFIG.siteUrl, pageW / 2, y, { align: "center" });
   y += 10;
 
   doc.setFillColor(...BRAND.burgundy);
@@ -742,7 +740,7 @@ async function renderAssemblyPage(doc: jsPDF, options: PdfOptions, totalPages: n
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7.5);
   doc.setTextColor(255, 255, 255);
-  doc.text("Tag @flinkatelier on Instagram", pageW / 2, y + 9, { align: "center" });
+  doc.text("Discover more inspiration on helma.tn", pageW / 2, y + 9, { align: "center" });
 
   renderPageFooter(doc, totalPages, totalPages);
 }

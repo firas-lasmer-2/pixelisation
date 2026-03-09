@@ -7,9 +7,9 @@ import { useOrder } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle, Home, Copy, FileText, Truck, Package, MapPin, Share2, Check, QrCode, Gift, Users } from "lucide-react";
+import { CheckCircle, Home, Copy, FileText, Truck, Package, MapPin, Share2, Check, Gift, Users } from "lucide-react";
 import { RegenerationRequestForm } from "@/components/shared/RegenerationRequestForm";
-import QRCodeLib from "qrcode";
+import { BRAND, buildTrackUrl } from "@/lib/brand";
 
 function ConfettiParticle({ delay, color }: { delay: number; color: string }) {
   const left = Math.random() * 100;
@@ -71,26 +71,11 @@ const Confirmation = () => {
   const { order } = useOrder();
   const [copied, setCopied] = useState<string | null>(null);
   const [showConfetti, setShowConfetti] = useState(true);
-  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
-
-  const viewerUrl = order.instructionCode
-    ? `${window.location.origin}/viewer/${order.instructionCode}`
-    : "";
 
   useEffect(() => {
     const timer = setTimeout(() => setShowConfetti(false), 3000);
     return () => clearTimeout(timer);
   }, []);
-
-  // Generate QR code for viewer URL
-  useEffect(() => {
-    if (!viewerUrl) return;
-    QRCodeLib.toDataURL(viewerUrl, {
-      width: 200,
-      margin: 1,
-      color: { dark: "#2B2B2B", light: "#FAF7F2" },
-    }).then(url => setQrDataUrl(url)).catch(() => {});
-  }, [viewerUrl]);
 
   const copyCode = (text: string, key: string) => {
     navigator.clipboard.writeText(text);
@@ -140,7 +125,7 @@ const Confirmation = () => {
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">{t.confirmation.orderRef}</span>
                   <Badge variant="secondary" className="gap-1 font-mono text-sm">
-                    {order.orderRef || "FK-XXXXXX"}
+                    {order.orderRef || "HL-XXXXXX"}
                     <button onClick={() => copyCode(order.orderRef, "ref")} className="hover:text-primary transition-colors">
                       {copied === "ref" ? <Check className="h-3 w-3 text-primary" /> : <Copy className="h-3 w-3" />}
                     </button>
@@ -203,27 +188,6 @@ const Confirmation = () => {
               </CardContent>
             </Card>
 
-            {/* QR Code for viewer access */}
-            {qrDataUrl && (
-              <Card className="mb-8 text-center">
-                <CardContent className="p-6 space-y-3">
-                  <div className="flex items-center justify-center gap-2">
-                    <QrCode className="h-4 w-4 text-primary" />
-                    <h3 className="font-semibold text-sm">{t.confirmation.qrTitle || "Accès à vos instructions"}</h3>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {t.confirmation.qrDescription || "Scannez ce QR code avec votre téléphone pour accéder à vos instructions de peinture interactives."}
-                  </p>
-                  <div className="flex justify-center">
-                    <div className="p-2 bg-card border-2 border-primary/20 rounded-xl inline-block">
-                      <img src={qrDataUrl} alt="QR Code" className="w-32 h-32" />
-                    </div>
-                  </div>
-                  <p className="text-[10px] text-muted-foreground font-mono break-all">{viewerUrl}</p>
-                </CardContent>
-              </Card>
-            )}
-
             {/* Referral Program */}
             <Card className="mb-8 text-center border-primary/20">
               <CardContent className="p-6 space-y-3">
@@ -251,7 +215,7 @@ const Confirmation = () => {
                   size="sm"
                   className="gap-2"
                   onClick={() => {
-                    const msg = `🎨 Utilise mon code REF-${order.instructionCode} pour obtenir 30 DT de réduction sur ta première commande Flink Atelier !\n${window.location.origin}`;
+                    const msg = `🎨 Utilise mon code REF-${order.instructionCode} pour obtenir 30 DT de réduction sur ta première commande ${BRAND.name} !\n${window.location.origin}`;
                     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
                   }}
                 >
@@ -263,7 +227,7 @@ const Confirmation = () => {
 
             {/* Regeneration request for AI categories */}
             {order.category && ["family", "kids_dream", "pet"].includes(order.category) && (
-              <RegenerationRequestForm orderRef={order.orderRef} className="mb-8 text-start" />
+              <RegenerationRequestForm orderRef={order.orderRef} instructionCode={order.instructionCode} className="mb-8 text-start" />
             )}
 
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
@@ -274,7 +238,7 @@ const Confirmation = () => {
                 </Link>
               </Button>
               <Button asChild variant="outline" className="rounded-full">
-                <Link to="/track">
+                <Link to={buildTrackUrl(order.orderRef, order.instructionCode, window.location.origin).replace(window.location.origin, "")}>
                   <Truck className="me-2 h-4 w-4" />
                   {t.confirmation.trackOrder}
                 </Link>

@@ -36,6 +36,7 @@ export interface OrderState {
   giftMessage: string;
   dreamJob: string;
   aiGeneratedUrl: string;
+  aiGenerationRunId: string;
 }
 
 /** Backward compat: first photo */
@@ -61,6 +62,7 @@ const initialState: OrderState = {
   giftMessage: "",
   dreamJob: "",
   aiGeneratedUrl: "",
+  aiGenerationRunId: "",
 };
 
 interface OrderContextType {
@@ -75,8 +77,21 @@ interface OrderContextType {
   setShipping: (shipping: ShippingInfo) => void;
   setGift: (isGift: boolean, message: string) => void;
   setDreamJob: (job: string) => void;
-  setAiGeneratedUrl: (url: string) => void;
-  confirmOrder: (couponCode?: string | null, discountAmount?: number) => void;
+  setAiGeneratedUrl: (url: string, generationRunId?: string) => void;
+  confirmOrder: (input: {
+    contact: ContactInfo;
+    shipping: ShippingInfo;
+    isGift: boolean;
+    giftMessage: string;
+    couponCode?: string | null;
+    sessionId?: string | null;
+  }) => Promise<{
+    orderRef: string;
+    instructionCode: string;
+    totalPrice: number;
+    discountAmount: number;
+    emailSent: boolean;
+  }>;
   resetOrder: () => void;
 }
 
@@ -85,7 +100,17 @@ const OrderContext = createContext<OrderContextType | null>(null);
 export function OrderProvider({ children }: { children: ReactNode }) {
   const [order, setOrder] = useState<OrderState>(initialState);
 
-  const setCategory = useCallback((category: OrderCategory) => setOrder((o) => ({ ...o, category, photos: [], croppedArea: null, selectedStyle: null, stylePreviewUrl: "", dreamJob: "", aiGeneratedUrl: "" })), []);
+  const setCategory = useCallback((category: OrderCategory) => setOrder((o) => ({
+    ...o,
+    category,
+    photos: [],
+    croppedArea: null,
+    selectedStyle: null,
+    stylePreviewUrl: "",
+    dreamJob: "",
+    aiGeneratedUrl: "",
+    aiGenerationRunId: "",
+  })), []);
   const setPhoto = useCallback((photo: string, index = 0) => setOrder((o) => {
     const photos = [...o.photos];
     photos[index] = photo;
@@ -102,80 +127,69 @@ export function OrderProvider({ children }: { children: ReactNode }) {
   const setShipping = useCallback((shipping: ShippingInfo) => setOrder((o) => ({ ...o, shipping })), []);
   const setGift = useCallback((isGift: boolean, giftMessage: string) => setOrder((o) => ({ ...o, isGift, giftMessage })), []);
   const setDreamJob = useCallback((dreamJob: string) => setOrder((o) => ({ ...o, dreamJob })), []);
-  const setAiGeneratedUrl = useCallback((aiGeneratedUrl: string) => setOrder((o) => ({ ...o, aiGeneratedUrl })), []);
+  const setAiGeneratedUrl = useCallback((aiGeneratedUrl: string, aiGenerationRunId = "") => setOrder((o) => ({ ...o, aiGeneratedUrl, aiGenerationRunId })), []);
 
-  const confirmOrder = useCallback(async (couponCode?: string | null, discountAmount?: number) => {
-    const ref = "FK-" + Date.now().toString(36).toUpperCase();
-    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-    const discount = discountAmount || 0;
-    
-    setOrder((o) => {
-      const price = o.selectedSize ? PRICING[o.selectedSize] : 0;
-      
-      const saveOrder = async () => {
-        let photoUrl = "";
-        const mainPhoto = o.aiGeneratedUrl || o.photos[0] || "";
-        if (mainPhoto) {
-          try {
-            const blob = await fetch(mainPhoto).then(r => r.blob());
-            const fileName = `${ref}-${Date.now()}.jpg`;
-            const { data: uploadData } = await supabase.storage
-              .from("order-photos")
-              .upload(fileName, blob, { contentType: "image/jpeg" });
-            if (uploadData) {
-              const { data: urlData } = supabase.storage.from("order-photos").getPublicUrl(fileName);
-              photoUrl = urlData.publicUrl;
-            }
-          } catch (e) {
-            console.error("Photo upload failed:", e);
-          }
-        }
+  const confirmOrder = useCallback(async (input: {
+    contact: ContactInfo;
+    shipping: ShippingInfo;
+    isGift: boolean;
+    giftMessage: string;
+    couponCode?: string | null;
+    sessionId?: string | null;
+  }) => {
+    const snapshot = {
+      ...order,
+      contact: input.contact,
+      shipping: input.shipping,
+      isGift: input.isGift,
+      giftMessage: input.giftMessage,
+    };
 
-        const finalPrice = price - discount;
-        await supabase.from("orders").insert({
-          order_ref: ref,
-          instruction_code: code,
-          kit_size: o.selectedSize || "",
-          art_style: o.selectedStyle || "",
-          category: o.category,
-          dream_job: o.dreamJob || null,
-          photo_url: photoUrl,
-          is_gift: o.isGift,
-          gift_message: o.giftMessage,
-          contact_first_name: o.contact.firstName,
-          contact_last_name: o.contact.lastName,
-          contact_phone: o.contact.phone,
-          contact_email: o.contact.email,
-          shipping_address: o.shipping.address,
-          shipping_city: o.shipping.city,
-          shipping_governorate: o.shipping.governorate,
-          shipping_postal_code: o.shipping.postalCode,
-          total_price: finalPrice,
-          coupon_code: couponCode || null,
-          discount_amount: discount,
-        });
+    if (!snapshot.selectedSize || !snapshot.selectedStyle) {
+      throw new Error("Order is missing size or style");
+    }
 
-        // Auto-send confirmation email
-        if (o.contact.email) {
-          supabase.functions.invoke("send-order-email", {
-            body: {
-              email: o.contact.email,
-              name: o.contact.firstName,
-              orderRef: ref,
-              status: "confirmed",
-              kitSize: o.selectedSize,
-              artStyle: o.selectedStyle,
-              totalPrice: finalPrice,
-              category: o.category,
-            },
-          }).catch(e => console.error("Confirmation email failed:", e));
-        }
-      };
-      saveOrder().catch(console.error);
-
-      return { ...o, orderRef: ref, instructionCode: code };
+    const { data, error } = await supabase.functions.invoke("create-order", {
+      body: {
+        category: snapshot.category,
+        photos: snapshot.photos,
+        aiGeneratedUrl: snapshot.aiGeneratedUrl || undefined,
+        generationRunId: snapshot.aiGenerationRunId || undefined,
+        selectedStyle: snapshot.selectedStyle,
+        selectedSize: snapshot.selectedSize,
+        contact: snapshot.contact,
+        shipping: snapshot.shipping,
+        isGift: snapshot.isGift,
+        giftMessage: snapshot.giftMessage,
+        dreamJob: snapshot.dreamJob || undefined,
+        couponCode: input.couponCode || null,
+        sessionId: input.sessionId || null,
+      },
     });
-  }, []);
+
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
+
+    const result = {
+      orderRef: data.orderRef as string,
+      instructionCode: data.instructionCode as string,
+      totalPrice: data.totalPrice as number,
+      discountAmount: data.discountAmount as number,
+      emailSent: Boolean(data.emailSent),
+    };
+
+    setOrder((current) => ({
+      ...current,
+      contact: input.contact,
+      shipping: input.shipping,
+      isGift: input.isGift,
+      giftMessage: input.giftMessage,
+      orderRef: result.orderRef,
+      instructionCode: result.instructionCode,
+    }));
+
+    return result;
+  }, [order]);
 
   const resetOrder = useCallback(() => setOrder(initialState), []);
 

@@ -9,8 +9,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { PALETTES, StylePalette, STYLE_KEYS } from "@/lib/palettes";
 import { renderPixelGrid } from "@/lib/imageProcessing";
 import { Home, AlertCircle, Loader2 } from "lucide-react";
+import { STORAGE_KEYS } from "@/lib/brand";
 
-const VIEWER_STORAGE_PREFIX = "flink-viewer-data-";
+const VIEWER_STORAGE_PREFIX = STORAGE_KEYS.viewerDataPrefix;
 
 interface ViewerData {
   indices: number[];

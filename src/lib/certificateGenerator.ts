@@ -1,4 +1,5 @@
 import jsPDF from "jspdf";
+import { BRAND } from "./brand";
 
 interface CertificateOptions {
   name: string;
@@ -44,7 +45,7 @@ export async function generateCertificate(options: CertificateOptions): Promise<
   doc.setFontSize(12);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(120, 120, 120);
-  doc.text("Flink Atelier — Peinture par numéros", w / 2, 50, { align: "center" });
+  doc.text(`${BRAND.name} — Peinture par numéros`, w / 2, 50, { align: "center" });
 
   // Decorative line
   doc.setDrawColor(200, 175, 120);
@@ -105,7 +106,7 @@ export async function generateCertificate(options: CertificateOptions): Promise<
   doc.line(w / 2 - 30, sigY, w / 2 + 30, sigY);
   doc.setFontSize(9);
   doc.setTextColor(150, 150, 150);
-  doc.text("Flink Atelier", w / 2, sigY + 5, { align: "center" });
+  doc.text(BRAND.name, w / 2, sigY + 5, { align: "center" });
 
   return doc.output("blob");
 }

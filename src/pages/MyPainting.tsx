@@ -5,7 +5,8 @@ import { Footer } from "@/components/landing/Footer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Camera, Check, Share2, Home, ImagePlus, Trash2, Trophy } from "lucide-react";
+import { Camera, Check, Share2, Home, Trash2, Trophy } from "lucide-react";
+import { BRAND, STORAGE_KEYS } from "@/lib/brand";
 
 interface ProgressEntry {
   stage: number;
@@ -22,7 +23,7 @@ const STAGES = [
 ];
 
 function getStorageKey(code: string) {
-  return `flink-progress-${code}`;
+  return `${STORAGE_KEYS.progressPrefix}${code}`;
 }
 
 function loadProgress(code: string): ProgressEntry[] {
@@ -81,7 +82,7 @@ const MyPainting = () => {
   };
 
   const shareProgress = () => {
-    const msg = `🎨 Mon parcours de peinture Flink Atelier — ${progressPct}% terminé !\n${window.location.href}`;
+    const msg = `🎨 Mon parcours de peinture ${BRAND.name} — ${progressPct}% terminé !\n${window.location.href}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
   };
 

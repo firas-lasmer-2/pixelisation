@@ -4,6 +4,7 @@ import { useTranslation } from "@/i18n";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { Button } from "@/components/ui/button";
 import { Menu, X, Stamp, Sparkles, Sun, Moon, ImageIcon } from "lucide-react";
+import { BRAND, STORAGE_KEYS } from "@/lib/brand";
 
 export function Navbar() {
   const { t } = useTranslation();
@@ -11,7 +12,7 @@ export function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [dark, setDark] = useState(() => {
     if (typeof window === "undefined") return false;
-    return localStorage.getItem("flink-theme") === "dark" || document.documentElement.classList.contains("dark");
+    return localStorage.getItem(STORAGE_KEYS.theme) === "dark" || document.documentElement.classList.contains("dark");
   });
   const location = useLocation();
   const isStudio = location.pathname.startsWith("/studio");
@@ -25,10 +26,10 @@ export function Navbar() {
   useEffect(() => {
     if (dark) {
       document.documentElement.classList.add("dark");
-      localStorage.setItem("flink-theme", "dark");
+      localStorage.setItem(STORAGE_KEYS.theme, "dark");
     } else {
       document.documentElement.classList.remove("dark");
-      localStorage.setItem("flink-theme", "light");
+      localStorage.setItem(STORAGE_KEYS.theme, "light");
     }
   }, [dark]);
 
@@ -50,7 +51,7 @@ export function Navbar() {
             <Stamp className="h-5 w-5 text-primary-foreground" />
           </div>
           <span className="text-xl font-bold tracking-tight" style={{ fontFamily: "'Playfair Display', serif" }}>
-            Flink Atelier
+            {BRAND.name}
           </span>
         </Link>
 

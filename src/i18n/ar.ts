@@ -159,13 +159,13 @@ export const ar: Translations = {
     },
     contact: {
       title: "تواصل معنا",
-      email: "contact@flinkatelier.com",
+      email: "contact@helma.tn",
     },
     legal: {
       privacy: "سياسة الخصوصية",
       terms: "الشروط والأحكام",
     },
-    copyright: "© 2025 Flink Atelier. جميع الحقوق محفوظة.",
+    copyright: "© 2026 Helma. جميع الحقوق محفوظة.",
     trustBadges: {
       freeShipping: "توصيل مجاني",
       cod: "الدفع عند الاستلام",
@@ -333,7 +333,7 @@ export const ar: Translations = {
       "صفحة دليل الألوان مع النسب المئوية وخريطة الأقسام",
       "شبكة مكبّرة (قسم واحد في كل صفحة) لأقصى وضوح",
       "خريطة موقع مصغّرة على كل قسم",
-      "صفحة نهائية مع نصائح الرسم ورمز QR قابل للمسح",
+      "صفحة أخيرة مع نصائح الرسم ورابط إلى Helma",
     ],
     backToOrder: "العودة للطلب",
     backHome: "الرئيسية",
@@ -367,9 +367,11 @@ export const ar: Translations = {
   track: {
     title: "تتبع طلبي",
     subtitle: "أدخل مرجع طلبك لمتابعة حالة التوصيل.",
-    placeholder: "FK-XXXXXX",
+    subtitleSecure: "أدخل مرجع الطلب ورمز التتبع لمتابعة حالة التوصيل.",
+    placeholder: "HL-XXXXXX",
+    instructionPlaceholder: "رمز التتبع",
     searchBtn: "بحث",
-    notFound: "لم يتم العثور على طلب بهذا المرجع.",
+    notFound: "لم يتم العثور على طلب بهذه البيانات.",
     statusTitle: "حالة طلبك",
     statuses: {
       confirmed: "تم تأكيد الطلب",

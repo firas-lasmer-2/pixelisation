@@ -20,10 +20,11 @@ import { ViewerToolbar } from "@/components/viewer/ViewerToolbar";
 import { ColorTooltip } from "@/components/viewer/ColorTooltip";
 import { renderSmoothPreview } from "@/lib/imageProcessing";
 import { COLOR_LETTERS } from "@/lib/palettes";
+import { STORAGE_KEYS } from "@/lib/brand";
 
 const SECTION_COLS = 9;
 const SECTION_ROWS = 13;
-const STORAGE_KEY = "flink-viewer-completed";
+const STORAGE_KEY = STORAGE_KEYS.viewerCompleted;
 
 interface GridViewerProps {
   indices: Uint8Array;

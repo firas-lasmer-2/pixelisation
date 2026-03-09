@@ -1,4 +1,4 @@
-# 📖 Project Documentation — Flink Paint-by-Numbers
+# 📖 Project Documentation — Helma
 
 > Custom paint-by-numbers kit creator for the Tunisian market. Users upload a photo, choose a style and size, then order a physical kit delivered to their door.
 
@@ -261,7 +261,7 @@ interface OrderState {
 ### Implementation
 
 - `I18nProvider` wraps the app, provides `useTranslation()` hook
-- Locale persisted in `localStorage` (`flink-locale`)
+- Locale persisted in `localStorage` (`helma-locale`)
 - `document.dir` and `document.lang` auto-updated on locale change
 - Translation files: `src/i18n/fr.ts`, `src/i18n/ar.ts`
 
@@ -318,12 +318,8 @@ The design follows a luxury editorial direction with:
 - French as primary language with Arabic RTL support
 - WhatsApp as primary customer support channel
 
-### 4. No Backend (Client-Side Only)
-Currently operates without a backend. Order references are generated client-side. The app is ready for Lovable Cloud integration for:
-- Order persistence and tracking
-- User authentication
-- Payment processing
-- Image storage
+### 4. Supabase-Backed Operations
+The storefront uses Supabase for order persistence, tracking, admin auth, storage, email triggers, and public edge functions such as order creation and tracking verification.
 
 ### 5. Scroll-Reveal Animations
 All landing page sections use IntersectionObserver-based reveal animations for a polished, progressive disclosure experience without impacting initial page load.

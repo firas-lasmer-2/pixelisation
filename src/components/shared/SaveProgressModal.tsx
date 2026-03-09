@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Bookmark, Phone, Copy, Check } from "lucide-react";
+import { STORAGE_KEYS } from "@/lib/brand";
 
 interface SaveProgressModalProps {
   open: boolean;
@@ -16,12 +17,19 @@ export function SaveProgressModal({ open, onOpenChange, step }: SaveProgressModa
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const recoveryUrl = `${window.location.origin}/studio?recover=true`;
+  const sessionId = (() => {
+    const existingSessionId = sessionStorage.getItem(STORAGE_KEYS.session);
+    if (existingSessionId) return existingSessionId;
+    const nextSessionId = crypto.randomUUID();
+    sessionStorage.setItem(STORAGE_KEYS.session, nextSessionId);
+    return nextSessionId;
+  })();
+  const recoveryUrl = `${window.location.origin}/studio?resume=${sessionId}`;
 
   const handleSave = () => {
     const digits = phone.replace(/\D/g, "");
     if (digits.length === 8) {
-      localStorage.setItem("flink-recovery", JSON.stringify({
+      localStorage.setItem(STORAGE_KEYS.recovery, JSON.stringify({
         phone: digits,
         step,
         timestamp: Date.now(),
@@ -102,7 +110,7 @@ export function SaveProgressModal({ open, onOpenChange, step }: SaveProgressModa
             </div>
             <p className="font-semibold">Commande sauvegardée !</p>
             <p className="text-sm text-muted-foreground">
-              Vous recevrez un rappel WhatsApp pour reprendre votre commande.
+              Votre progression est enregistrée sur cet appareil et vous pouvez reprendre via ce lien.
             </p>
             <Button variant="outline" onClick={() => onOpenChange(false)} className="w-full">
               Continuer ma commande

@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { useTranslation } from "@/i18n";
 import { Stamp, Truck, Banknote, ShieldCheck, Heart } from "lucide-react";
+import { BRAND } from "@/lib/brand";
 
 export function Footer() {
   const { t } = useTranslation();
@@ -19,7 +20,7 @@ export function Footer() {
                 <Stamp className="h-5 w-5 text-primary-foreground" />
               </div>
               <span className="text-xl font-bold tracking-tight" style={{ fontFamily: "'Playfair Display', serif" }}>
-                Flink Atelier
+                {BRAND.name}
               </span>
             </Link>
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-muted-foreground">{t.footer.tagline}</p>

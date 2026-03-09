@@ -1,10 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+import { corsHeaders } from "../_shared/cors.ts";
 
 const MAX_REQUESTS_PER_DAY = 3;
 
@@ -12,30 +8,30 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { order_ref, reason } = await req.json();
+    const { order_ref, instruction_code, reason } = await req.json();
 
-    if (!order_ref || !reason || reason.trim().length < 5) {
-      return new Response(JSON.stringify({ error: "order_ref and reason (min 5 chars) required" }), {
+    if (!order_ref || !instruction_code || !reason || reason.trim().length < 5) {
+      return new Response(JSON.stringify({ error: "order_ref, instruction_code, and reason (min 5 chars) are required" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Get client IP
-    const clientIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
-      || req.headers.get("cf-connecting-ip")
-      || "unknown";
+    const clientIp =
+      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      req.headers.get("cf-connecting-ip") ||
+      "unknown";
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    // Validate order exists
     const { data: order, error: orderError } = await supabase
       .from("orders")
-      .select("id, order_ref, photo_url, category")
+      .select("id, order_ref, instruction_code, photo_url, category")
       .eq("order_ref", order_ref.toUpperCase())
+      .eq("instruction_code", instruction_code.toUpperCase())
       .maybeSingle();
 
     if (orderError || !order) {
@@ -45,7 +41,6 @@ serve(async (req) => {
       });
     }
 
-    // Check IP rate limit — max 3 per 24h
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const { count, error: countError } = await supabase
       .from("regeneration_requests")
@@ -56,7 +51,6 @@ serve(async (req) => {
     if (countError) throw countError;
 
     const remaining = MAX_REQUESTS_PER_DAY - (count || 0);
-
     if (remaining <= 0) {
       return new Response(JSON.stringify({
         error: "Rate limit exceeded. Maximum 3 requests per 24 hours.",
@@ -67,7 +61,6 @@ serve(async (req) => {
       });
     }
 
-    // Check if there's already a pending request for this order
     const { data: existing } = await supabase
       .from("regeneration_requests")
       .select("id")
@@ -78,14 +71,13 @@ serve(async (req) => {
     if (existing) {
       return new Response(JSON.stringify({
         error: "A regeneration request is already pending for this order.",
-        remaining: remaining,
+        remaining,
       }), {
         status: 409,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Insert request
     const { error: insertError } = await supabase
       .from("regeneration_requests")
       .insert({

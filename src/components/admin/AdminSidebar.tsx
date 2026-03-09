@@ -15,6 +15,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
+import { BRAND } from "@/lib/brand";
 
 const items = [
   { title: "Dashboard", url: "/admin", icon: LayoutDashboard },
@@ -47,7 +48,7 @@ export function AdminSidebar() {
           <SidebarGroupLabel>
             {!collapsed && (
               <span className="text-sm font-bold" style={{ fontFamily: "'Playfair Display', serif" }}>
-                Flink Atelier
+                {BRAND.name}
               </span>
             )}
           </SidebarGroupLabel>

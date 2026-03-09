@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -35,6 +36,7 @@ export default function AdminRegenerations() {
   const [selected, setSelected] = useState<RegenRequest | null>(null);
   const [regenerating, setRegenerating] = useState(false);
   const [newPhotoUrl, setNewPhotoUrl] = useState<string | null>(null);
+  const [generationRunId, setGenerationRunId] = useState<string | null>(null);
   const [adminNote, setAdminNote] = useState("");
   const [updating, setUpdating] = useState(false);
 
@@ -54,22 +56,32 @@ export default function AdminRegenerations() {
     if (!selected) return;
     setRegenerating(true);
     try {
-      // Fetch order details to get category and photos
-      const { data: order } = await supabase
-        .from("orders")
-        .select("category, photo_url, dream_job")
-        .eq("id", selected.order_id)
-        .single();
+      const [{ data: order }, { data: sourceAssets }] = await Promise.all([
+        supabase
+          .from("orders")
+          .select("category, photo_url, dream_job")
+          .eq("id", selected.order_id)
+          .single(),
+        supabase
+          .from("order_assets")
+          .select("url, asset_kind")
+          .eq("order_id", selected.order_id)
+          .eq("asset_kind", "source")
+          .order("created_at", { ascending: true }),
+      ]);
 
       if (!order) throw new Error("Order not found");
 
-      const images = order.photo_url ? [order.photo_url] : [];
+      const sourceImages = (sourceAssets || []).map((asset) => asset.url).filter(Boolean);
+      const images = sourceImages.length > 0 ? sourceImages : order.photo_url ? [order.photo_url] : [];
 
       const { data, error } = await supabase.functions.invoke("generate-creative", {
         body: {
           category: order.category,
           images,
           dreamJob: order.dream_job,
+          orderId: selected.order_id,
+          requestedBy: "admin_regeneration",
         },
       });
 
@@ -77,6 +89,7 @@ export default function AdminRegenerations() {
       if (data?.error) throw new Error(data.error);
 
       setNewPhotoUrl(data.imageUrl);
+      setGenerationRunId(data.generationRunId || null);
     } catch (e: any) {
       console.error("Regeneration failed:", e);
       alert("Regeneration failed: " + (e.message || "Unknown error"));
@@ -89,13 +102,45 @@ export default function AdminRegenerations() {
     if (!selected || !newPhotoUrl) return;
     setUpdating(true);
     try {
-      // Update the order's photo
       await supabase
         .from("orders")
         .update({ photo_url: newPhotoUrl })
         .eq("id", selected.order_id);
 
-      // Mark request as completed
+      await supabase
+        .from("order_assets")
+        .insert({
+          order_id: selected.order_id,
+          generation_run_id: generationRunId,
+          asset_kind: "regenerated",
+          url: newPhotoUrl,
+          label: "Approved regeneration",
+          metadata: {
+            requestId: selected.id,
+            approvedAt: new Date().toISOString(),
+          },
+        });
+
+      if (generationRunId) {
+        const { data: generationRun } = await supabase
+          .from("ai_generation_runs")
+          .select("metadata")
+          .eq("id", generationRunId)
+          .maybeSingle();
+
+        await supabase
+          .from("ai_generation_runs")
+          .update({
+            metadata: {
+              ...(generationRun?.metadata && typeof generationRun.metadata === "object" ? generationRun.metadata : {}),
+              approved: true,
+              approvedAt: new Date().toISOString(),
+              requestId: selected.id,
+            },
+          })
+          .eq("id", generationRunId);
+      }
+
       await supabase
         .from("regeneration_requests")
         .update({
@@ -108,6 +153,7 @@ export default function AdminRegenerations() {
       queryClient.invalidateQueries({ queryKey: ["regen-requests"] });
       setSelected(null);
       setNewPhotoUrl(null);
+      setGenerationRunId(null);
       setAdminNote("");
     } catch (e: any) {
       alert("Error: " + e.message);
@@ -130,6 +176,7 @@ export default function AdminRegenerations() {
 
       queryClient.invalidateQueries({ queryKey: ["regen-requests"] });
       setSelected(null);
+      setGenerationRunId(null);
       setAdminNote("");
     } catch (e: any) {
       alert("Error: " + e.message);
@@ -203,6 +250,7 @@ export default function AdminRegenerations() {
                       <Button size="sm" variant="outline" onClick={() => {
                         setSelected(req);
                         setNewPhotoUrl(req.regenerated_photo_url);
+                        setGenerationRunId(null);
                         setAdminNote(req.admin_note || "");
                       }}>
                         <Eye className="h-3 w-3 mr-1" />

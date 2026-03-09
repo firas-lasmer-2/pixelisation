@@ -28,6 +28,8 @@ import {
   Paintbrush, BookOpen, Grid3X3, Crown, Leaf, Award, Upload, Tag, X, Wand2, Loader2,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { STORAGE_KEYS } from "@/lib/brand";
+import { trackFunnelEvent } from "@/lib/funnel";
 
 /* ─── Kit size → image processing key mapping ─── */
 const STORE_TO_IMG: Record<KitSize, ImgKitSize> = {
@@ -192,6 +194,7 @@ const Studio = () => {
   const { t, dir } = useTranslation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const resumeSessionId = searchParams.get("resume")?.trim() || null;
   const { order, setCategory, setPhoto, removePhoto, setCroppedArea, setStyle, setSize, setContact, setShipping, setGift, setDreamJob, setAiGeneratedUrl, confirmOrder } = useOrder();
   const [step, setStep] = useState(1);
   const [processing, setProcessing] = useState(false);
@@ -200,6 +203,7 @@ const Studio = () => {
   const [slideDir, setSlideDir] = useState<"left" | "right">("right");
   const [animKey, setAnimKey] = useState(0);
   const [showSaveModal, setShowSaveModal] = useState(false);
+  const [submittingOrder, setSubmittingOrder] = useState(false);
 
   const [contactForm, setContactForm] = useState<ContactInfo>(order.contact);
   const [shippingForm, setShippingForm] = useState<ShippingInfo>(order.shipping);
@@ -212,15 +216,25 @@ const Studio = () => {
   const [promoLoading, setPromoLoading] = useState(false);
   const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discount_type: string; discount_value: number } | null>(null);
   const [promoError, setPromoError] = useState("");
+  const [recoveringCart, setRecoveringCart] = useState(Boolean(resumeSessionId));
+  const [sessionId] = useState(() => {
+    const requestedSessionId = resumeSessionId || sessionStorage.getItem(STORAGE_KEYS.session);
+    const resolvedSessionId = requestedSessionId || crypto.randomUUID();
+    sessionStorage.setItem(STORAGE_KEYS.session, resolvedSessionId);
+    return resolvedSessionId;
+  });
+  const lastTrackedStepRef = useRef<number | null>(null);
+  const lastPhotoCountRef = useRef(0);
 
   // URL-based category
   useEffect(() => {
+    if (resumeSessionId) return;
     const cat = searchParams.get("category");
     if (cat && ["classic", "family", "kids_dream", "pet"].includes(cat)) {
       setCategory(cat as OrderCategory);
       setStep(2); // Skip category selection
     }
-  }, [searchParams, setCategory]);
+  }, [resumeSessionId, searchParams, setCategory]);
 
   // Compute step meta based on category
   const stepMeta = getStepMeta(order.category);
@@ -231,24 +245,131 @@ const Studio = () => {
   // For classic: 1=Category, 2=Kit, 3=Upload, 4=Crop, 5=Style, 6=Confirm
   // For AI: 1=Category, 2=Kit, 3=Upload, 4=Crop, 5=AI, 6=Style, 7=Confirm
 
-  // Abandoned cart tracking
-  const sessionIdRef = useRef(() => {
-    let sid = sessionStorage.getItem("flink-session");
-    if (!sid) { sid = crypto.randomUUID(); sessionStorage.setItem("flink-session", sid); }
-    return sid;
-  });
+  useEffect(() => {
+    void trackFunnelEvent({
+      sessionId,
+      eventName: "studio_session_started",
+      metadata: {
+        resumed: Boolean(resumeSessionId),
+      },
+    });
+  }, [resumeSessionId, sessionId]);
 
   useEffect(() => {
-    const sid = sessionIdRef.current();
+    if (!resumeSessionId) {
+      setRecoveringCart(false);
+      return;
+    }
+
+    let active = true;
+    const restoreCart = async () => {
+      setRecoveringCart(true);
+      const { data, error } = await supabase.functions.invoke("recover-cart", {
+        body: {
+          sessionId: resumeSessionId,
+        },
+      });
+
+      if (!active) return;
+
+      if (error || data?.error) {
+        toast({
+          title: "Reprise impossible",
+          description: "Nous n'avons pas pu restaurer cette commande.",
+          variant: "destructive",
+        });
+        setRecoveringCart(false);
+        return;
+      }
+
+      if (data?.alreadyRecovered && data?.recoveredOrderRef) {
+        toast({
+          title: "Commande déjà finalisée",
+          description: `Cette session a déjà été convertie en commande ${data.recoveredOrderRef}.`,
+        });
+        setRecoveringCart(false);
+        return;
+      }
+
+      const cart = data?.cart;
+      if (!cart) {
+        setRecoveringCart(false);
+        return;
+      }
+
+      const nextCategory = cart.category;
+      if (nextCategory && ["classic", "family", "kids_dream", "pet"].includes(nextCategory)) {
+        setCategory(nextCategory as OrderCategory);
+      }
+
+      if (cart.selectedSize && ["stamp_kit_40x50", "stamp_kit_30x40", "stamp_kit_A4"].includes(cart.selectedSize)) {
+        setSize(cart.selectedSize as KitSize);
+      }
+
+      if (cart.dreamJob) {
+        setDreamJob(cart.dreamJob);
+      }
+
+      const recoveredContact: ContactInfo = {
+        firstName: cart.contact?.firstName || "",
+        lastName: "",
+        phone: cart.contact?.phone || "",
+        email: cart.contact?.email || "",
+      };
+      setContact(recoveredContact);
+      setContactForm(recoveredContact);
+
+      const shouldRestartFromUpload = Boolean(cart.photoUploaded) || Number(cart.stepReached || 0) >= 3;
+      const restoredStep = shouldRestartFromUpload
+        ? 3
+        : cart.selectedSize
+        ? 3
+        : nextCategory
+        ? 2
+        : 1;
+
+      setStep(restoredStep);
+
+      toast({
+        title: "Commande restaurée",
+        description: shouldRestartFromUpload
+          ? "Vos choix ont été restaurés. Rechargez vos photos pour reprendre."
+          : "Votre progression a été restaurée.",
+      });
+
+      void trackFunnelEvent({
+        sessionId,
+        eventName: "cart_recovered",
+        category: nextCategory,
+        step: restoredStep,
+        metadata: {
+          source: "resume_link",
+          originalStep: cart.stepReached || null,
+          photoUploaded: Boolean(cart.photoUploaded),
+        },
+      });
+
+      setRecoveringCart(false);
+    };
+
+    void restoreCart();
+
+    return () => {
+      active = false;
+    };
+  }, [resumeSessionId, sessionId, setCategory, setContact, setDreamJob, setSize]);
+
+  useEffect(() => {
     const photo = getPhoto(order);
     const save = async () => {
       await supabase.from("abandoned_carts").upsert({
-        session_id: sid,
+        session_id: sessionId,
         step_reached: step,
         kit_size: order.selectedSize || null,
         art_style: order.selectedStyle || null,
         photo_uploaded: !!photo,
         category: order.category,
+        dream_job: order.dreamJob || null,
         contact_phone: contactForm.phone.replace(/\D/g, "").length === 8 ? contactForm.phone : null,
         contact_email: contactForm.email || null,
         contact_first_name: contactForm.firstName || null,
@@ -256,7 +377,42 @@ const Studio = () => {
     };
     const timer = setTimeout(save, 2000);
     return () => clearTimeout(timer);
-  }, [step, order.selectedSize, order.selectedStyle, order.photos, order.category, contactForm.phone, contactForm.email, contactForm.firstName]);
+  }, [step, order.selectedSize, order.selectedStyle, order.photos, order.category, order.dreamJob, contactForm.phone, contactForm.email, contactForm.firstName, sessionId]);
+
+  useEffect(() => {
+    if (lastTrackedStepRef.current === step) return;
+    lastTrackedStepRef.current = step;
+
+    void trackFunnelEvent({
+      sessionId,
+      eventName: step === getConfirmStep() ? "checkout_viewed" : "step_viewed",
+      category: order.category,
+      step,
+      metadata: {
+        isAiCategory: isAICategory,
+      },
+    });
+  }, [isAICategory, order.category, sessionId, step]);
+
+  useEffect(() => {
+    const uploadedCount = order.photos.filter(Boolean).length;
+    if (uploadedCount < lastPhotoCountRef.current) {
+      lastPhotoCountRef.current = uploadedCount;
+      return;
+    }
+    if (uploadedCount <= 0 || uploadedCount === lastPhotoCountRef.current) return;
+
+    lastPhotoCountRef.current = uploadedCount;
+    void trackFunnelEvent({
+      sessionId,
+      eventName: "photo_uploaded",
+      category: order.category,
+      step,
+      metadata: {
+        uploadedCount,
+      },
+    });
+  }, [order.category, order.photos, sessionId, step]);
 
   const validateCoupon = async () => {
     if (!promoCode.trim()) return;
@@ -276,6 +432,15 @@ const Studio = () => {
     if (data.min_order > price) { setPromoError(`Min. commande: ${data.min_order} DT`); setPromoLoading(false); return; }
 
     setAppliedCoupon({ code: data.code, discount_type: data.discount_type, discount_value: data.discount_value });
+    void trackFunnelEvent({
+      sessionId,
+      eventName: "coupon_applied",
+      category: order.category,
+      step,
+      metadata: {
+        code: data.code,
+      },
+    });
     setPromoLoading(false);
   };
 
@@ -327,6 +492,16 @@ const Studio = () => {
 
       setPreviews(allPreviews);
       setProcessing(false);
+      void trackFunnelEvent({
+        sessionId,
+        eventName: "crop_completed",
+        category: order.category,
+        step: getCropStep(),
+        metadata: {
+          selectedSize: order.selectedSize,
+          fromAi: Boolean(order.aiGeneratedUrl),
+        },
+      });
       // For AI categories, the style step is one more
       goToStep(isAICategory ? 6 : 5);
     } catch (err) {
@@ -340,11 +515,23 @@ const Studio = () => {
     setAiGenerating(true);
     try {
       const images = order.photos.filter(Boolean);
+      void trackFunnelEvent({
+        sessionId,
+        eventName: "ai_generation_requested",
+        category: order.category,
+        step: getAIStep(),
+        metadata: {
+          imageCount: images.length,
+        },
+      });
+
       const { data, error } = await supabase.functions.invoke("generate-creative", {
         body: {
           category: order.category,
           images,
           dreamJob: order.dreamJob,
+          sessionId,
+          requestedBy: "studio",
         },
       });
 
@@ -352,7 +539,16 @@ const Studio = () => {
       if (data?.error) throw new Error(data.error);
 
       const imageUrl = data.imageUrl;
-      setAiGeneratedUrl(imageUrl);
+      setAiGeneratedUrl(imageUrl, data.generationRunId);
+      void trackFunnelEvent({
+        sessionId,
+        eventName: "ai_generation_succeeded",
+        category: order.category,
+        step: getAIStep(),
+        metadata: {
+          generationRunId: data.generationRunId || null,
+        },
+      });
       toast({ title: "Image IA générée ✨", description: "Votre création est prête ! Passez au recadrage." });
       // Move to crop step (step 4 for AI categories after AI step 5)
       // Actually AI step is step 5, then we go back to crop at step 4
@@ -362,6 +558,15 @@ const Studio = () => {
       goToStep(5); // Go to crop after AI
     } catch (err: any) {
       console.error("AI generation failed:", err);
+      void trackFunnelEvent({
+        sessionId,
+        eventName: "ai_generation_failed",
+        category: order.category,
+        step: getAIStep(),
+        metadata: {
+          message: err?.message || "unknown_error",
+        },
+      });
       toast({ title: "Erreur", description: err.message || "La génération IA a échoué. Réessayez.", variant: "destructive" });
     } finally {
       setAiGenerating(false);
@@ -384,19 +589,58 @@ const Studio = () => {
   };
 
   const handleConfirm = async () => {
-    setContact(contactForm);
-    setShipping(shippingForm);
-    setGift(isGift, giftMessage);
+    setSubmittingOrder(true);
 
-    const sid = sessionIdRef.current();
-    supabase.from("abandoned_carts").update({ recovered: true }).eq("session_id", sid).then(() => {});
+    try {
+      const result = await confirmOrder({
+        contact: contactForm,
+        shipping: shippingForm,
+        isGift,
+        giftMessage,
+        couponCode: appliedCoupon?.code || null,
+        sessionId,
+      });
 
-    if (appliedCoupon) {
-      supabase.from("coupons").update({ used_count: undefined }).eq("code", appliedCoupon.code).then(() => {});
+      void trackFunnelEvent({
+        sessionId,
+        eventName: "order_confirmed",
+        category: order.category,
+        step: getConfirmStep(),
+        orderRef: result.orderRef,
+        metadata: {
+          selectedSize: order.selectedSize,
+          selectedStyle: order.selectedStyle,
+          usedCoupon: appliedCoupon?.code || null,
+          hasAiAsset: Boolean(order.aiGeneratedUrl),
+        },
+      });
+
+      if (!result.emailSent && contactForm.email) {
+        toast({
+          title: "Commande confirmée",
+          description: "La commande a été enregistrée, mais l'email de confirmation n'a pas pu être envoyé.",
+        });
+      }
+
+      navigate("/confirmation");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Impossible de confirmer la commande.";
+      const friendly =
+        message === "COUPON_INVALID" ? "Ce code promo n'est plus valide." :
+        message === "COUPON_EXPIRED" ? "Ce code promo a expiré." :
+        message === "COUPON_EXHAUSTED" ? "Ce code promo n'est plus disponible." :
+        message === "COUPON_MIN_ORDER" ? "Le montant minimum pour ce code promo n'est pas atteint." :
+        message;
+
+      setPromoError(message.startsWith("COUPON_") ? friendly : "");
+      toast({
+        title: "Erreur",
+        description: friendly,
+        variant: "destructive",
+      });
+    } finally {
+      setSubmittingOrder(false);
     }
-
-    confirmOrder(appliedCoupon?.code || null, getDiscount());
-    navigate("/confirmation");
   };
 
   const estimatedDelivery = () => {
@@ -430,6 +674,21 @@ const Studio = () => {
 
   const photo = getPhoto(order);
   const photoForProcessing = order.aiGeneratedUrl || photo;
+
+  if (recoveringCart) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <Navbar />
+        <div className="flex-1 flex items-center justify-center px-4">
+          <div className="text-center space-y-3">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+            <p className="text-sm text-muted-foreground">Restauration de votre commande...</p>
+          </div>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -1097,12 +1356,12 @@ const Studio = () => {
 
                       <Button
                         onClick={handleConfirm}
-                        disabled={!isConfirmValid}
+                        disabled={!isConfirmValid || submittingOrder}
                         className="w-full btn-premium text-primary-foreground border-0 gap-2 hidden lg:flex h-12 text-base font-semibold"
                         size="lg"
                       >
-                        <Sparkles className="h-5 w-5" />
-                        Confirmer la commande
+                        {submittingOrder ? <Loader2 className="h-5 w-5 animate-spin" /> : <Sparkles className="h-5 w-5" />}
+                        {submittingOrder ? "Confirmation..." : "Confirmer la commande"}
                       </Button>
                     </div>
                   </div>
@@ -1112,9 +1371,9 @@ const Studio = () => {
                     <Button variant="outline" onClick={() => goToStep(getStyleStep())} className="gap-2">
                       <BackIcon className="h-4 w-4" /> {t.studio.back}
                     </Button>
-                    <Button onClick={handleConfirm} disabled={!isConfirmValid} className="flex-1 btn-premium text-primary-foreground border-0 gap-2 h-12 text-base font-semibold" size="lg">
-                      <Sparkles className="h-5 w-5" />
-                      Confirmer la commande
+                    <Button onClick={handleConfirm} disabled={!isConfirmValid || submittingOrder} className="flex-1 btn-premium text-primary-foreground border-0 gap-2 h-12 text-base font-semibold" size="lg">
+                      {submittingOrder ? <Loader2 className="h-5 w-5 animate-spin" /> : <Sparkles className="h-5 w-5" />}
+                      {submittingOrder ? "Confirmation..." : "Confirmer la commande"}
                     </Button>
                   </div>
                 </div>

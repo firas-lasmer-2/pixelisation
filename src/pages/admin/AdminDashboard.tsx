@@ -12,6 +12,8 @@ import { Badge } from "@/components/ui/badge";
 import type { Database } from "@/integrations/supabase/types";
 
 type Order = Database["public"]["Tables"]["orders"]["Row"];
+type AbandonedCart = Database["public"]["Tables"]["abandoned_carts"]["Row"];
+type FunnelEvent = Database["public"]["Tables"]["funnel_events"]["Row"];
 
 const SIZE_LABELS: Record<string, string> = {
   stamp_kit_40x50: "40×50 cm",
@@ -23,21 +25,31 @@ export default function AdminDashboard() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [abandonedCount, setAbandonedCount] = useState(0);
   const [uploadedCount, setUploadedCount] = useState(0);
+  const [croppedCount, setCroppedCount] = useState(0);
   const [checkoutCount, setCheckoutCount] = useState(0);
+  const [recoveredCount, setRecoveredCount] = useState(0);
+  const [recoveryEmailsSent, setRecoveryEmailsSent] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
-      const [{ data: ordersData }, { data: cartData }] = await Promise.all([
+      const [{ data: ordersData }, { data: cartData }, { data: funnelData }] = await Promise.all([
         supabase.from("orders").select("*").order("created_at", { ascending: false }),
-        supabase.from("abandoned_carts").select("session_id, step_reached, photo_uploaded, recovered"),
+        supabase.from("abandoned_carts").select("*"),
+        supabase.from("funnel_events").select("*"),
       ]);
       setOrders(ordersData || []);
 
-      const carts = cartData || [];
-      setAbandonedCount(carts.length);
-      setUploadedCount(carts.filter(c => c.photo_uploaded).length);
-      setCheckoutCount(carts.filter(c => c.step_reached >= 5).length);
+      const carts = (cartData || []) as AbandonedCart[];
+      const funnelEvents = (funnelData || []) as FunnelEvent[];
+      const uniqueSessions = (events: FunnelEvent[], eventName: string) => new Set(events.filter((event) => event.event_name === eventName).map((event) => event.session_id)).size;
+
+      setAbandonedCount(funnelEvents.length > 0 ? new Set(funnelEvents.map((event) => event.session_id)).size : carts.length);
+      setUploadedCount(funnelEvents.length > 0 ? uniqueSessions(funnelEvents, "photo_uploaded") : carts.filter((cart) => cart.photo_uploaded).length);
+      setCroppedCount(funnelEvents.length > 0 ? uniqueSessions(funnelEvents, "crop_completed") : carts.filter((cart) => cart.step_reached >= 4).length);
+      setCheckoutCount(funnelEvents.length > 0 ? uniqueSessions(funnelEvents, "checkout_viewed") : carts.filter((cart) => cart.step_reached >= 5).length);
+      setRecoveredCount(carts.filter((cart) => cart.recovered).length);
+      setRecoveryEmailsSent(carts.filter((cart) => Boolean(cart.last_recovery_sent_at)).length);
       setLoading(false);
     };
     fetchData();
@@ -130,13 +142,37 @@ export default function AdminDashboard() {
         pendingOrders={pendingOrders}
       />
 
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card className="border-border">
+          <CardContent className="p-5">
+            <p className="text-xs uppercase tracking-[0.12em] text-muted-foreground">Recovered Carts</p>
+            <p className="mt-2 text-3xl font-bold text-green-600">{recoveredCount}</p>
+            <p className="mt-1 text-sm text-muted-foreground">Sessions converted after being saved in `abandoned_carts`.</p>
+          </CardContent>
+        </Card>
+        <Card className="border-border">
+          <CardContent className="p-5">
+            <p className="text-xs uppercase tracking-[0.12em] text-muted-foreground">Recovery Emails</p>
+            <p className="mt-2 text-3xl font-bold text-primary">{recoveryEmailsSent}</p>
+            <p className="mt-1 text-sm text-muted-foreground">Saved carts contacted through the Helma recovery flow.</p>
+          </CardContent>
+        </Card>
+        <Card className="border-border">
+          <CardContent className="p-5">
+            <p className="text-xs uppercase tracking-[0.12em] text-muted-foreground">Checkout Intent</p>
+            <p className="mt-2 text-3xl font-bold">{checkoutCount}</p>
+            <p className="mt-1 text-sm text-muted-foreground">Unique sessions that reached the checkout screen.</p>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Row 1: Revenue + Conversion Funnel */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <RevenueChart data={chartData} />
         <ConversionFunnel
           visits={abandonedCount}
           uploads={uploadedCount}
-          cropped={uploadedCount}
+          cropped={croppedCount}
           checkouts={checkoutCount}
           confirmed={totalOrders}
         />

@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { checkIsAdmin } from "@/lib/adminAuth";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AdminSidebar } from "./AdminSidebar";
+import { BRAND } from "@/lib/brand";
 
 export function AdminLayout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
@@ -50,7 +51,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
         <div className="flex-1 flex flex-col">
           <header className="h-14 flex items-center border-b border-border bg-background/95 backdrop-blur-sm px-4">
             <SidebarTrigger className="mr-4" />
-            <span className="text-sm font-semibold text-muted-foreground">Flink Admin</span>
+            <span className="text-sm font-semibold text-muted-foreground">{BRAND.adminName}</span>
           </header>
           <main className="flex-1 p-6 bg-background overflow-auto">
             {children}

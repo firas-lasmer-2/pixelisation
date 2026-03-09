@@ -113,7 +113,7 @@ const AdminCoupons = () => {
               <div className="space-y-2">
                 <Label>Code</Label>
                 <div className="flex gap-2">
-                  <Input value={code} onChange={e => setCode(e.target.value.toUpperCase())} placeholder="FK-XXXXXX" className="font-mono" />
+                  <Input value={code} onChange={e => setCode(e.target.value.toUpperCase())} placeholder="HELMA30" className="font-mono" />
                   <Button variant="outline" size="sm" onClick={generateCode}>Auto</Button>
                 </div>
               </div>
