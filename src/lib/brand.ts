@@ -41,6 +41,11 @@ export function buildTrackUrl(orderRef?: string, instructionCode?: string, origi
   return query ? `${base}?${query}` : base;
 }
 
+export function buildViewerUrl(instructionCode?: string, origin?: string) {
+  const base = `${origin || BRAND.siteUrl}/viewer`;
+  return instructionCode ? `${base}/${instructionCode.toUpperCase()}` : base;
+}
+
 export function migrateLegacyStorage() {
   if (typeof window === "undefined") return;
 

@@ -21,10 +21,7 @@ import { ColorTooltip } from "@/components/viewer/ColorTooltip";
 import { renderSmoothPreview } from "@/lib/imageProcessing";
 import { COLOR_LETTERS } from "@/lib/palettes";
 import { STORAGE_KEYS } from "@/lib/brand";
-
-const SECTION_COLS = 9;
-const SECTION_ROWS = 13;
-const STORAGE_KEY = STORAGE_KEYS.viewerCompleted;
+import { SECTION_COLS, SECTION_ROWS } from "@/lib/paintingLayout";
 
 interface GridViewerProps {
   indices: Uint8Array;
@@ -32,6 +29,7 @@ interface GridViewerProps {
   gridRows: number;
   palette: StylePalette;
   previewDataUrl: string;
+  progressKey?: string;
 }
 
 function hexToRgb(hex: string): [number, number, number] {
@@ -42,26 +40,18 @@ function hexToRgb(hex: string): [number, number, number] {
   ];
 }
 
-export function GridViewer({ indices, gridCols, gridRows, palette, previewDataUrl }: GridViewerProps) {
+export function GridViewer({ indices, gridCols, gridRows, palette, previewDataUrl, progressKey }: GridViewerProps) {
   const { t } = useTranslation();
   const sectionCols = Math.ceil(gridCols / SECTION_COLS);
   const sectionRows = Math.ceil(gridRows / SECTION_ROWS);
   const totalSections = sectionCols * sectionRows;
+  const storageKey = progressKey ? `${STORAGE_KEYS.progressPrefix}${progressKey.toUpperCase()}` : STORAGE_KEYS.viewerCompleted;
 
   const [activeSection, setActiveSection] = useState(0);
   const [zoom, setZoom] = useState(1);
   const [colorMode, setColorMode] = useState(true);
   const [paintMode, setPaintMode] = useState(false);
-  const [completedSections, setCompletedSections] = useState<Set<number>>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const arr = JSON.parse(saved);
-        return new Set(arr);
-      }
-    } catch {}
-    return new Set();
-  });
+  const [completedSections, setCompletedSections] = useState<Set<number>>(new Set());
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [highlightColor, setHighlightColor] = useState<number | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -94,12 +84,26 @@ export function GridViewer({ indices, gridCols, gridRows, palette, previewDataUr
     }
   }, [indices, palette.colors, gridCols, gridRows, previewDataUrl]);
 
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (!saved) {
+        setCompletedSections(new Set());
+        return;
+      }
+      const parsed = JSON.parse(saved);
+      setCompletedSections(new Set(Array.isArray(parsed) ? parsed : []));
+    } catch {
+      setCompletedSections(new Set());
+    }
+  }, [storageKey]);
+
   // Persist completed sections
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify([...completedSections]));
+      localStorage.setItem(storageKey, JSON.stringify([...completedSections]));
     } catch {}
-  }, [completedSections]);
+  }, [completedSections, storageKey]);
 
   // Keyboard navigation
   useEffect(() => {

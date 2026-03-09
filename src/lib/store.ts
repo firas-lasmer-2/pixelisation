@@ -34,6 +34,7 @@ export interface OrderState {
   instructionCode: string;
   isGift: boolean;
   giftMessage: string;
+  dedicationText: string;
   dreamJob: string;
   aiGeneratedUrl: string;
   aiGenerationRunId: string;
@@ -60,6 +61,7 @@ const initialState: OrderState = {
   instructionCode: "",
   isGift: false,
   giftMessage: "",
+  dedicationText: "",
   dreamJob: "",
   aiGeneratedUrl: "",
   aiGenerationRunId: "",
@@ -76,6 +78,7 @@ interface OrderContextType {
   setContact: (contact: ContactInfo) => void;
   setShipping: (shipping: ShippingInfo) => void;
   setGift: (isGift: boolean, message: string) => void;
+  setDedicationText: (dedicationText: string) => void;
   setDreamJob: (job: string) => void;
   setAiGeneratedUrl: (url: string, generationRunId?: string) => void;
   confirmOrder: (input: {
@@ -83,6 +86,7 @@ interface OrderContextType {
     shipping: ShippingInfo;
     isGift: boolean;
     giftMessage: string;
+    dedicationText?: string | null;
     couponCode?: string | null;
     sessionId?: string | null;
   }) => Promise<{
@@ -126,6 +130,7 @@ export function OrderProvider({ children }: { children: ReactNode }) {
   const setContact = useCallback((contact: ContactInfo) => setOrder((o) => ({ ...o, contact })), []);
   const setShipping = useCallback((shipping: ShippingInfo) => setOrder((o) => ({ ...o, shipping })), []);
   const setGift = useCallback((isGift: boolean, giftMessage: string) => setOrder((o) => ({ ...o, isGift, giftMessage })), []);
+  const setDedicationText = useCallback((dedicationText: string) => setOrder((o) => ({ ...o, dedicationText })), []);
   const setDreamJob = useCallback((dreamJob: string) => setOrder((o) => ({ ...o, dreamJob })), []);
   const setAiGeneratedUrl = useCallback((aiGeneratedUrl: string, aiGenerationRunId = "") => setOrder((o) => ({ ...o, aiGeneratedUrl, aiGenerationRunId })), []);
 
@@ -134,6 +139,7 @@ export function OrderProvider({ children }: { children: ReactNode }) {
     shipping: ShippingInfo;
     isGift: boolean;
     giftMessage: string;
+    dedicationText?: string | null;
     couponCode?: string | null;
     sessionId?: string | null;
   }) => {
@@ -143,6 +149,7 @@ export function OrderProvider({ children }: { children: ReactNode }) {
       shipping: input.shipping,
       isGift: input.isGift,
       giftMessage: input.giftMessage,
+      dedicationText: input.dedicationText ?? order.dedicationText,
     };
 
     if (!snapshot.selectedSize || !snapshot.selectedStyle) {
@@ -161,13 +168,23 @@ export function OrderProvider({ children }: { children: ReactNode }) {
         shipping: snapshot.shipping,
         isGift: snapshot.isGift,
         giftMessage: snapshot.giftMessage,
+        dedicationText: snapshot.dedicationText || null,
         dreamJob: snapshot.dreamJob || undefined,
         couponCode: input.couponCode || null,
         sessionId: input.sessionId || null,
       },
     });
 
-    if (error) throw error;
+    if (error) {
+      const response = (error as { context?: Response }).context;
+      if (response instanceof Response) {
+        const payload = await response.clone().json().catch(() => null) as { error?: string } | null;
+        if (payload?.error) {
+          throw new Error(payload.error);
+        }
+      }
+      throw error;
+    }
     if (data?.error) throw new Error(data.error);
 
     const result = {
@@ -184,6 +201,7 @@ export function OrderProvider({ children }: { children: ReactNode }) {
       shipping: input.shipping,
       isGift: input.isGift,
       giftMessage: input.giftMessage,
+      dedicationText: input.dedicationText ?? current.dedicationText,
       orderRef: result.orderRef,
       instructionCode: result.instructionCode,
     }));
@@ -195,7 +213,7 @@ export function OrderProvider({ children }: { children: ReactNode }) {
 
   return React.createElement(
     OrderContext.Provider,
-    { value: { order, setCategory, setPhoto, removePhoto, setCroppedArea, setStyle, setSize, setContact, setShipping, setGift, setDreamJob, setAiGeneratedUrl, confirmOrder, resetOrder } },
+    { value: { order, setCategory, setPhoto, removePhoto, setCroppedArea, setStyle, setSize, setContact, setShipping, setGift, setDedicationText, setDreamJob, setAiGeneratedUrl, confirmOrder, resetOrder } },
     children
   );
 }

@@ -30,6 +30,7 @@ type CreateOrderPayload = {
   };
   isGift: boolean;
   giftMessage: string;
+  dedicationText?: string | null;
   dreamJob?: string;
   couponCode?: string | null;
   sessionId?: string | null;
@@ -212,8 +213,16 @@ serve(async (req) => {
 
     const mainPhotoUrl = uploadedAiResultUrl || uploadedSourceUrls[0] || null;
 
+    const orderUpdates: Record<string, unknown> = {};
     if (mainPhotoUrl) {
-      await supabase.from("orders").update({ photo_url: mainPhotoUrl }).eq("id", orderId);
+      orderUpdates.photo_url = mainPhotoUrl;
+    }
+    if (payload.dedicationText?.trim()) {
+      orderUpdates.dedication_text = payload.dedicationText.trim();
+    }
+
+    if (Object.keys(orderUpdates).length > 0) {
+      await supabase.from("orders").update(orderUpdates).eq("id", orderId);
     }
 
     const assetRows = buildAssetRows({

@@ -13,9 +13,9 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { sessionId } = await req.json();
-    if (!sessionId) {
-      return json(400, { error: "sessionId is required" });
+    const payload = await req.json();
+    if (!payload?.session_id) {
+      return json(400, { error: "session_id is required" });
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -25,38 +25,15 @@ serve(async (req) => {
     }
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
-    const { data: cart, error } = await supabase
+    const { error } = await supabase
       .from("abandoned_carts")
-      .select("*")
-      .eq("session_id", String(sessionId))
-      .maybeSingle();
+      .upsert(payload, { onConflict: "session_id" });
 
     if (error) throw error;
-    if (!cart) {
-      return json(404, { error: "Cart not found" });
-    }
 
-    return json(200, {
-      sessionId: cart.session_id,
-      alreadyRecovered: cart.recovered,
-      recoveredOrderRef: cart.recovered_order_ref,
-      cart: {
-        category: cart.category,
-        selectedSize: cart.kit_size,
-        selectedStyle: cart.art_style,
-        dedicationText: cart.dedication_text,
-        dreamJob: cart.dream_job,
-        stepReached: cart.step_reached,
-        photoUploaded: cart.photo_uploaded,
-        contact: {
-          firstName: cart.contact_first_name,
-          email: cart.contact_email,
-          phone: cart.contact_phone,
-        },
-      },
-    });
+    return json(200, { success: true });
   } catch (error) {
-    console.error("recover-cart error", error);
+    console.error("save-abandoned-cart error", error);
     return json(500, {
       error: error instanceof Error ? error.message : "Unknown error",
     });

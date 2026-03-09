@@ -1,4 +1,4 @@
-project_id = "aepyerecwdgoyotnpxer"
+project_id = "izpvsnygibsuehsmdhul"
 
 [functions.generate-creative]
 verify_jwt = false
@@ -19,4 +19,13 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.recover-cart]
+verify_jwt = false
+
+[functions.upsert-painting-manifest]
+verify_jwt = false
+
+[functions.get-painting-manifest]
+verify_jwt = false
+
+[functions.save-abandoned-cart]
 verify_jwt = false

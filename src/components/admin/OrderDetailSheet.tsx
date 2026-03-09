@@ -235,6 +235,11 @@ export function OrderDetailSheet({ order, open, onOpenChange, onStatusUpdated }:
               <div><span className="text-muted-foreground">Price:</span> <span className="font-medium">{order.total_price} DT</span></div>
               <div><span className="text-muted-foreground">Gift:</span> <span className="font-medium">{order.is_gift ? "Yes" : "No"}</span></div>
             </div>
+            {order.dedication_text && (
+              <p className="text-xs text-muted-foreground bg-primary/5 border border-primary/15 p-2 rounded">
+                Dedication: <span className="font-medium text-foreground">{order.dedication_text}</span>
+              </p>
+            )}
             {order.gift_message && (
               <p className="text-xs italic text-muted-foreground bg-muted p-2 rounded">"{order.gift_message}"</p>
             )}

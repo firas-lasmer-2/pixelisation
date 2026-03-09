@@ -1,4 +1,5 @@
 DROP POLICY IF EXISTS "Anyone can view orders" ON public.orders;
+DROP POLICY IF EXISTS "Admins can view orders" ON public.orders;
 CREATE POLICY "Admins can view orders"
   ON public.orders FOR SELECT
   TO authenticated
@@ -7,6 +8,7 @@ CREATE POLICY "Admins can view orders"
 DROP POLICY IF EXISTS "Anyone can read own cart" ON public.abandoned_carts;
 
 DROP POLICY IF EXISTS "Anyone can read regeneration requests" ON public.regeneration_requests;
+DROP POLICY IF EXISTS "Admins can view regeneration requests" ON public.regeneration_requests;
 CREATE POLICY "Admins can view regeneration requests"
   ON public.regeneration_requests FOR SELECT
   TO authenticated

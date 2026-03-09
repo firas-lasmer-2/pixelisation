@@ -1,15 +1,10 @@
 import jsPDF from "jspdf";
 import QRCode from "qrcode";
 import { PaletteColor, StylePalette, COLOR_LETTERS } from "./palettes";
-import { renderPixelGrid, renderSmoothPreview } from "./imageProcessing";
+import { renderSmoothPreview } from "./imageProcessing";
 import { BRAND as BRAND_CONFIG } from "./brand";
-
-// ─── Section dimensions (Qbrix-style: 9 cols × 13 rows) ────────────────
-const SECTION_COLS = 9;
-const SECTION_ROWS = 13;
-const SECTIONS_PER_PAGE = 12; // 3 columns × 4 rows per A4 page
-const PAGE_GRID_COLS = 3;
-const PAGE_GRID_ROWS = 4;
+import { getPaintingStats, PAGE_GRID_COLS, PAGE_GRID_ROWS, SECTION_COLS, SECTION_ROWS, SECTIONS_PER_PAGE } from "./paintingLayout";
+import { type PaintingManifest, resolveManifestPalette } from "./paintingManifest";
 
 // ─── Brand Colors ───────────────────────────────────────────────────────
 const BRAND = {
@@ -29,10 +24,16 @@ interface PdfOptions {
   gridCols: number;
   gridRows: number;
   palette: StylePalette;
-  previewDataUrl: string;
   canvasSize: string;
   brandName?: string;
+  orderRef?: string;
   instructionCode?: string;
+  dedicationText?: string | null;
+  referenceImageUrl?: string | null;
+  sourceImageUrl?: string | null;
+  viewerUrl?: string | null;
+  estimatedHours?: string;
+  difficultyLabel?: string;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────
@@ -92,6 +93,18 @@ function drawGoldDotDivider(doc: jsPDF, cx: number, y: number, _width: number) {
   doc.setFillColor(...BRAND.gold);
   for (let i = 0; i < dots; i++) {
     doc.circle(startX + i * spacing, y, 0.6, "F");
+  }
+}
+
+function tryAddImage(doc: jsPDF, imageUrl: string | null | undefined, format: "PNG" | "JPEG", x: number, y: number, w: number, h: number) {
+  if (!imageUrl || typeof imageUrl !== "string") return false;
+  if (!imageUrl.startsWith("data:image/")) return false;
+
+  try {
+    doc.addImage(imageUrl, format, x, y, w, h);
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -191,16 +204,21 @@ function renderCoverPage(doc: jsPDF, options: PdfOptions, colorCounts: number[],
   doc.setFontSize(11);
   doc.setTextColor(...BRAND.burgundy);
   doc.text(`INSTRUCTIONS — Kit ${canvasSize}`, pageW / 2, 40, { align: "center" });
+  if (options.orderRef) {
+    doc.setFontSize(8.5);
+    doc.setTextColor(...BRAND.warmGray);
+    doc.text(`Order ${options.orderRef} • Code ${options.instructionCode || "—"}`, pageW / 2, 45, { align: "center" });
+  }
 
   // Preview image
   const imgAspect = options.gridCols / options.gridRows;
   const imgMaxW = pageW - 55;
-  const imgMaxH = pageH - 160;
+  const imgMaxH = pageH - 172;
   let imgW = imgMaxW;
   let imgH = imgW / imgAspect;
   if (imgH > imgMaxH) { imgH = imgMaxH; imgW = imgH * imgAspect; }
   const imgX = (pageW - imgW) / 2;
-  const imgY = 46;
+  const imgY = 50;
 
   doc.setFillColor(200, 195, 185);
   doc.rect(imgX + 2, imgY + 2, imgW, imgH, "F");
@@ -208,20 +226,20 @@ function renderCoverPage(doc: jsPDF, options: PdfOptions, colorCounts: number[],
   doc.rect(imgX - 1.5, imgY - 1.5, imgW + 3, imgH + 3, "F");
   doc.setFillColor(255, 255, 255);
   doc.rect(imgX - 0.5, imgY - 0.5, imgW + 1, imgH + 1, "F");
-  const hiResCanvas = renderSmoothPreview(options.indices, palette.colors, options.gridCols, options.gridRows, 32);
-  const hiResDataUrl = hiResCanvas.toDataURL("image/png");
-  doc.addImage(hiResDataUrl, "PNG", imgX, imgY, imgW, imgH);
+  const coverImage = options.referenceImageUrl || renderSmoothPreview(options.indices, palette.colors, options.gridCols, options.gridRows, 16).toDataURL("image/jpeg", 0.9);
+  if (!tryAddImage(doc, coverImage, "JPEG", imgX, imgY, imgW, imgH)) {
+    const hiResCanvas = renderSmoothPreview(options.indices, palette.colors, options.gridCols, options.gridRows, 16);
+    doc.addImage(hiResCanvas.toDataURL("image/jpeg", 0.9), "JPEG", imgX, imgY, imgW, imgH);
+  }
 
   // Info badges
   const badgeY = imgY + imgH + 7;
-  const sectionCols = Math.ceil(options.gridCols / SECTION_COLS);
-  const sectionRows = Math.ceil(options.gridRows / SECTION_ROWS);
-  const totalSections = sectionCols * sectionRows;
+  const stats = getPaintingStats(options.gridCols, options.gridRows);
 
   const infos = [
     `${options.gridCols}×${options.gridRows} cells`,
     `${palette.colors.length} colors`,
-    `${totalSections} sections`,
+    `${stats.totalSections} sections`,
     `${totalPages} pages`,
   ];
   const badgeW = 34;
@@ -262,6 +280,28 @@ function renderCoverPage(doc: jsPDF, options: PdfOptions, colorCounts: number[],
     doc.text(COLOR_LETTERS[i], cx, stripY + 5.5, { align: "center" });
   });
 
+  if (options.dedicationText) {
+    const dedicationY = stripY + 12;
+    doc.setFillColor(...BRAND.goldPale);
+    doc.setDrawColor(...BRAND.goldLight);
+    doc.roundedRect(22, dedicationY - 4, pageW - 44, 14, 3, 3, "FD");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7);
+    doc.setTextColor(...BRAND.warmGray);
+    doc.text("DEDICATION", pageW / 2, dedicationY, { align: "center" });
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(11);
+    doc.setTextColor(...BRAND.charcoal);
+    doc.text(options.dedicationText, pageW / 2, dedicationY + 5, { align: "center" });
+  }
+
+  if (options.viewerUrl && options.instructionCode) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(...BRAND.gold);
+    doc.text(`Open the live viewer with code ${options.instructionCode}`, pageW / 2, pageH - 22, { align: "center" });
+  }
+
   // Bottom branding
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7);
@@ -269,6 +309,109 @@ function renderCoverPage(doc: jsPDF, options: PdfOptions, colorCounts: number[],
   doc.text(`${BRAND_CONFIG.domain} — Custom Paint by Numbers`, pageW / 2, pageH - 14, { align: "center" });
 
   renderPageFooter(doc, 1, totalPages);
+}
+
+async function renderStudioPage(doc: jsPDF, options: PdfOptions, totalPages: number) {
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const { brandName = BRAND_CONFIG.pdfName } = options;
+
+  doc.addPage();
+  doc.setFillColor(...BRAND.cream);
+  doc.rect(0, 0, pageW, pageH, "F");
+
+  renderPageHeader(doc, brandName, "Studio Guide");
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(18);
+  doc.setTextColor(...BRAND.charcoal);
+  doc.text("Your Painting Manifest", 14, 24);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.5);
+  doc.setTextColor(...BRAND.warmGray);
+  doc.text("The PDF, viewer, and section checklist all follow this same layout.", 14, 30);
+
+  const cardY = 38;
+  const cardH = 62;
+  const cardW = (pageW - 34) / 2;
+
+  doc.setFillColor(255, 255, 255);
+  doc.setDrawColor(...BRAND.goldLight);
+  doc.roundedRect(14, cardY, cardW, cardH, 3, 3, "FD");
+  doc.roundedRect(20 + cardW, cardY, cardW, cardH, 3, 3, "FD");
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(...BRAND.burgundy);
+  doc.text("Reference Preview", 18, cardY + 8);
+  doc.text("Painting Stats", 24 + cardW, cardY + 8);
+
+  const referenceImage = options.referenceImageUrl || null;
+  if (!tryAddImage(doc, referenceImage, "JPEG", 18, cardY + 12, cardW - 8, 42, 42)) {
+    const fallbackPreview = renderSmoothPreview(options.indices, options.palette.colors, options.gridCols, options.gridRows, 10);
+    doc.addImage(fallbackPreview.toDataURL("image/jpeg", 0.9), "JPEG", 18, cardY + 12, cardW - 8, 42, 42);
+  }
+
+  const statsLines = [
+    `Grid: ${options.gridCols} x ${options.gridRows}`,
+    `Colors: ${options.palette.colors.length}`,
+    `Sections: ${getPaintingStats(options.gridCols, options.gridRows).totalSections}`,
+    `Difficulty: ${options.difficultyLabel || "Custom"}`,
+    `Estimated time: ${options.estimatedHours || "Flexible"}`,
+  ];
+  statsLines.forEach((line, index) => {
+    doc.setFont("helvetica", index === 0 ? "bold" : "normal");
+    doc.setFontSize(8.5);
+    doc.setTextColor(...(index === 0 ? BRAND.charcoal : BRAND.warmGray));
+    doc.text(line, 24 + cardW, cardY + 18 + index * 8);
+  });
+
+  const detailY = 112;
+  doc.setFillColor(...BRAND.goldPale);
+  doc.setDrawColor(...BRAND.goldLight);
+  doc.roundedRect(14, detailY, pageW - 28, 44, 3, 3, "FD");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(...BRAND.burgundy);
+  doc.text("How to use this guide", 18, detailY + 9);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(...BRAND.charcoal);
+  [
+    "1. Use the viewer for zoom and color isolation, then paint from the printed sections.",
+    "2. Match the letter in each cell with the legend page before opening a new paint pot.",
+    "3. Work section by section and mark completed sections in the viewer as you go.",
+    "4. Keep this page nearby for the QR code and the instruction code if you switch devices.",
+  ].forEach((line, index) => {
+    doc.text(line, 18, detailY + 16 + index * 6);
+  });
+
+  if (options.viewerUrl) {
+    const qrY = 168;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(...BRAND.charcoal);
+    doc.text("Open the live viewer", 14, qrY);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(...BRAND.warmGray);
+    doc.text(`Viewer code: ${options.instructionCode || "—"}`, 14, qrY + 6);
+
+    try {
+      const qrDataUrl = await QRCode.toDataURL(options.viewerUrl, {
+        width: 220,
+        margin: 1,
+        color: { dark: "#2B2B2B", light: "#FAF7F2" },
+      });
+      doc.setFillColor(...BRAND.gold);
+      doc.rect(pageW - 58, qrY - 2, 44, 44, "F");
+      doc.addImage(qrDataUrl, "PNG", pageW - 56, qrY, 40, 40);
+    } catch {
+      // Ignore QR rendering failures and keep the page usable.
+    }
+  }
+
+  renderPageFooter(doc, 2, totalPages);
 }
 
 // ─── Page 2: Color Legend + Section Map ─────────────────────────────────
@@ -431,7 +574,7 @@ function renderLegendPage(doc: jsPDF, options: PdfOptions, colorCounts: number[]
     doc.text(line, 18, guideY + 8 + i * 4);
   });
 
-  renderPageFooter(doc, 2, totalPages);
+  renderPageFooter(doc, 3, totalPages);
 }
 
 // ─── Render a single mini-section within a multi-section page ───────────
@@ -597,7 +740,7 @@ function renderGridPages(doc: jsPDF, options: PdfOptions, totalPages: number) {
       );
     }
 
-    renderPageFooter(doc, pageIdx + 3, totalPages);
+    renderPageFooter(doc, pageIdx + 4, totalPages);
   }
 }
 
@@ -701,8 +844,8 @@ async function renderAssemblyPage(doc: jsPDF, options: PdfOptions, totalPages: n
   y += boxH;
 
   // QR Code
-  const qrUrl = BRAND_CONFIG.siteUrl;
-  const qrLabel = "Visit Helma Online";
+  const qrUrl = options.viewerUrl || BRAND_CONFIG.siteUrl;
+  const qrLabel = options.viewerUrl ? "Open your Helma viewer" : "Visit Helma Online";
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
@@ -728,35 +871,48 @@ async function renderAssemblyPage(doc: jsPDF, options: PdfOptions, totalPages: n
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   doc.setTextColor(...BRAND.gold);
-  doc.text(BRAND_CONFIG.siteUrl, pageW / 2, y, { align: "center" });
+  doc.text(qrUrl.replace(/^https?:\/\//, ""), pageW / 2, y, { align: "center" });
   y += 10;
 
   doc.setFillColor(...BRAND.burgundy);
-  doc.roundedRect(pageW / 2 - 55, y - 3, 110, 14, 3, 3, "F");
+  doc.roundedRect(pageW / 2 - 70, y - 3, 140, 18, 3, 3, "F");
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(12);
+  doc.setFontSize(11);
   doc.setTextColor(255, 255, 255);
-  doc.text("Share Your Creation!", pageW / 2, y + 4, { align: "center" });
+  doc.text("Finish, scan, and keep painting with confidence", pageW / 2, y + 4, { align: "center" });
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.5);
+  doc.setFontSize(7);
   doc.setTextColor(255, 255, 255);
-  doc.text("Discover more inspiration on helma.tn", pageW / 2, y + 9, { align: "center" });
+  doc.text("Your viewer and this PDF stay aligned through the same instruction code.", pageW / 2, y + 10, { align: "center" });
 
   renderPageFooter(doc, totalPages, totalPages);
 }
 
 // ─── Main Export ────────────────────────────────────────────────────────
-export async function generatePaintByNumbersPDF(options: PdfOptions): Promise<Blob> {
+export async function generatePaintByNumbersPDF(manifest: PaintingManifest): Promise<Blob> {
+  const options: PdfOptions = {
+    indices: new Uint8Array(manifest.indices),
+    gridCols: manifest.gridCols,
+    gridRows: manifest.gridRows,
+    palette: resolveManifestPalette(manifest),
+    canvasSize: manifest.canvasLabel,
+    brandName: BRAND_CONFIG.pdfName,
+    orderRef: manifest.orderRef,
+    instructionCode: manifest.instructionCode,
+    dedicationText: manifest.dedicationText,
+    referenceImageUrl: manifest.referenceImageUrl,
+    sourceImageUrl: manifest.sourceImageUrl,
+    viewerUrl: manifest.viewerUrl,
+    estimatedHours: manifest.stats.estimatedHours,
+    difficultyLabel: manifest.stats.difficultyLabel,
+  };
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const colorCounts = countColors(options.indices, options.palette.colors.length);
-
-  const sectionCols = Math.ceil(options.gridCols / SECTION_COLS);
-  const sectionRows = Math.ceil(options.gridRows / SECTION_ROWS);
-  const totalSections = sectionCols * sectionRows;
-  const totalGridPages = Math.ceil(totalSections / SECTIONS_PER_PAGE);
-  const totalPages = 1 + 1 + totalGridPages + 1; // cover + legend + grid pages + assembly
+  const { totalGridPages } = getPaintingStats(options.gridCols, options.gridRows);
+  const totalPages = 1 + 1 + 1 + totalGridPages + 1;
 
   renderCoverPage(doc, options, colorCounts, totalPages);
+  await renderStudioPage(doc, options, totalPages);
   renderLegendPage(doc, options, colorCounts, totalPages);
   renderGridPages(doc, options, totalPages);
   await renderAssemblyPage(doc, options, totalPages);
@@ -765,10 +921,6 @@ export async function generatePaintByNumbersPDF(options: PdfOptions): Promise<Bl
 }
 
 export function getSectionStats(gridCols: number, gridRows: number) {
-  const sectionCols = Math.ceil(gridCols / SECTION_COLS);
-  const sectionRows = Math.ceil(gridRows / SECTION_ROWS);
-  const totalSections = sectionCols * sectionRows;
-  const totalGridPages = Math.ceil(totalSections / SECTIONS_PER_PAGE);
-  const totalPages = 1 + 1 + totalGridPages + 1;
+  const { totalSections, totalPages, sectionCols, sectionRows } = getPaintingStats(gridCols, gridRows);
   return { totalSections, totalPages, sectionCols, sectionRows };
 }

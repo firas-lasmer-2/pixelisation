@@ -195,7 +195,7 @@ const Studio = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const resumeSessionId = searchParams.get("resume")?.trim() || null;
-  const { order, setCategory, setPhoto, removePhoto, setCroppedArea, setStyle, setSize, setContact, setShipping, setGift, setDreamJob, setAiGeneratedUrl, confirmOrder } = useOrder();
+  const { order, setCategory, setPhoto, removePhoto, setCroppedArea, setStyle, setSize, setContact, setShipping, setGift, setDedicationText, setDreamJob, setAiGeneratedUrl, confirmOrder } = useOrder();
   const [step, setStep] = useState(1);
   const [processing, setProcessing] = useState(false);
   const [aiGenerating, setAiGenerating] = useState(false);
@@ -318,6 +318,7 @@ const Studio = () => {
       };
       setContact(recoveredContact);
       setContactForm(recoveredContact);
+      setDedicationText(cart.dedicationText || "");
 
       const shouldRestartFromUpload = Boolean(cart.photoUploaded) || Number(cart.stepReached || 0) >= 3;
       const restoredStep = shouldRestartFromUpload
@@ -357,27 +358,30 @@ const Studio = () => {
     return () => {
       active = false;
     };
-  }, [resumeSessionId, sessionId, setCategory, setContact, setDreamJob, setSize]);
+  }, [resumeSessionId, sessionId, setCategory, setContact, setDedicationText, setDreamJob, setSize]);
 
   useEffect(() => {
     const photo = getPhoto(order);
     const save = async () => {
-      await supabase.from("abandoned_carts").upsert({
-        session_id: sessionId,
-        step_reached: step,
-        kit_size: order.selectedSize || null,
-        art_style: order.selectedStyle || null,
-        photo_uploaded: !!photo,
-        category: order.category,
-        dream_job: order.dreamJob || null,
-        contact_phone: contactForm.phone.replace(/\D/g, "").length === 8 ? contactForm.phone : null,
-        contact_email: contactForm.email || null,
-        contact_first_name: contactForm.firstName || null,
-      }, { onConflict: "session_id" });
+      await supabase.functions.invoke("save-abandoned-cart", {
+        body: {
+          session_id: sessionId,
+          step_reached: step,
+          kit_size: order.selectedSize || null,
+          art_style: order.selectedStyle || null,
+          photo_uploaded: !!photo,
+          category: order.category,
+          dream_job: order.dreamJob || null,
+          dedication_text: order.dedicationText || null,
+          contact_phone: contactForm.phone.replace(/\D/g, "").length === 8 ? contactForm.phone : null,
+          contact_email: contactForm.email || null,
+          contact_first_name: contactForm.firstName || null,
+        },
+      });
     };
     const timer = setTimeout(save, 2000);
     return () => clearTimeout(timer);
-  }, [step, order.selectedSize, order.selectedStyle, order.photos, order.category, order.dreamJob, contactForm.phone, contactForm.email, contactForm.firstName, sessionId]);
+  }, [step, order.selectedSize, order.selectedStyle, order.photos, order.category, order.dreamJob, order.dedicationText, contactForm.phone, contactForm.email, contactForm.firstName, sessionId]);
 
   useEffect(() => {
     if (lastTrackedStepRef.current === step) return;
@@ -597,6 +601,7 @@ const Studio = () => {
         shipping: shippingForm,
         isGift,
         giftMessage,
+        dedicationText: order.dedicationText,
         couponCode: appliedCoupon?.code || null,
         sessionId,
       });
@@ -630,6 +635,9 @@ const Studio = () => {
         message === "COUPON_EXPIRED" ? "Ce code promo a expiré." :
         message === "COUPON_EXHAUSTED" ? "Ce code promo n'est plus disponible." :
         message === "COUPON_MIN_ORDER" ? "Le montant minimum pour ce code promo n'est pas atteint." :
+        message === "Missing valid contact details" ? "Vérifiez votre prénom, nom et numéro de téléphone." :
+        message === "Missing shipping details" ? "Ajoutez l'adresse, la ville et le gouvernorat de livraison." :
+        message === "Missing selected size or style" ? "Choisissez une taille et un style avant de confirmer." :
         message;
 
       setPromoError(message.startsWith("COUPON_") ? friendly : "");
@@ -651,7 +659,7 @@ const Studio = () => {
 
   const isConfirmValid = contactForm.firstName && contactForm.lastName &&
     contactForm.phone.replace(/\D/g, "").length === 8 &&
-    shippingForm.address && shippingForm.city;
+    shippingForm.address && shippingForm.city && shippingForm.governorate;
 
   const NextIcon = dir === "rtl" ? ArrowLeft : ArrowRight;
   const BackIcon = dir === "rtl" ? ArrowRight : ArrowLeft;
@@ -1200,7 +1208,9 @@ const Studio = () => {
                               <Input value={shippingForm.city} onChange={(e) => setShippingForm({ ...shippingForm, city: e.target.value })} className={shippingForm.city ? "border-primary/30" : ""} />
                             </div>
                             <div className="space-y-2">
-                              <Label className="text-xs font-semibold">Gouvernorat</Label>
+                              <Label className="flex items-center gap-2 text-xs font-semibold">
+                                Gouvernorat {shippingForm.governorate && <Check className="h-3 w-3 text-primary" />}
+                              </Label>
                               <Select value={shippingForm.governorate} onValueChange={(val) => setShippingForm({ ...shippingForm, governorate: val })}>
                                 <SelectTrigger><SelectValue placeholder="Gouvernorat" /></SelectTrigger>
                                 <SelectContent>
@@ -1233,6 +1243,25 @@ const Studio = () => {
                           </div>
                         )}
                       </div>
+
+                      <div className="rounded-xl border bg-card p-6">
+                        <div className="mb-4 flex items-center gap-2">
+                          <Edit3 className="h-4 w-4 text-primary" />
+                          <h3 className="text-sm font-bold uppercase tracking-[0.1em] section-gold-line pb-2">Dedication</h3>
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-xs font-semibold">Short line for the guide or viewer (optional)</Label>
+                          <Textarea
+                            value={order.dedicationText}
+                            onChange={(e) => setDedicationText(e.target.value.slice(0, 36))}
+                            placeholder="I love you • 14.02.2026"
+                            rows={2}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            {order.dedicationText.length}/36 characters. Best for names, dates, or a short message.
+                          </p>
+                        </div>
+                      </div>
                     </div>
 
                     {/* Right: Premium Order Summary */}
@@ -1257,6 +1286,12 @@ const Studio = () => {
                           )}
 
                           <div className="space-y-2.5">
+                            {order.dedicationText && (
+                              <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2">
+                                <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">Dedication</p>
+                                <p className="mt-1 text-sm font-medium">{order.dedicationText}</p>
+                              </div>
+                            )}
                             <div className="flex items-center justify-between text-sm">
                               <span className="text-muted-foreground">Style</span>
                               <div className="flex items-center gap-2">

@@ -1,35 +1,28 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
 import { Navbar } from "@/components/shared/Navbar";
 import { Footer } from "@/components/landing/Footer";
 import { GridViewer } from "@/components/GridViewer";
-import { useTranslation } from "@/i18n";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { PALETTES, StylePalette, STYLE_KEYS } from "@/lib/palettes";
-import { renderPixelGrid } from "@/lib/imageProcessing";
-import { Home, AlertCircle, Loader2 } from "lucide-react";
-import { STORAGE_KEYS } from "@/lib/brand";
-
-const VIEWER_STORAGE_PREFIX = STORAGE_KEYS.viewerDataPrefix;
-
-interface ViewerData {
-  indices: number[];
-  gridCols: number;
-  gridRows: number;
-  paletteKey: string;
-  previewDataUrl: string;
-  createdAt: string;
-}
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { supabase } from "@/integrations/supabase/client";
+import {
+  loadPaintingManifestLocally,
+  persistPaintingManifestLocally,
+  resolveManifestPalette,
+  type PaintingManifest,
+} from "@/lib/paintingManifest";
+import { buildTrackUrl } from "@/lib/brand";
+import { Home, AlertCircle, Loader2, ExternalLink, Layers, Palette, Clock4, Heart, Truck } from "lucide-react";
 
 const ViewerPage = () => {
   const { code } = useParams<{ code: string }>();
-  const { t } = useTranslation();
-  const vt = (t as any).viewerPage || {};
-
-  const [viewerData, setViewerData] = useState<ViewerData | null>(null);
+  const [manifest, setManifest] = useState<PaintingManifest | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [referenceMode, setReferenceMode] = useState<"reference" | "source">("reference");
 
   useEffect(() => {
     if (!code) {
@@ -38,41 +31,56 @@ const ViewerPage = () => {
       return;
     }
 
-    try {
-      const stored = localStorage.getItem(VIEWER_STORAGE_PREFIX + code.toUpperCase());
-      if (stored) {
-        const parsed = JSON.parse(stored) as ViewerData;
-        setViewerData(parsed);
-      } else {
-        setError(true);
+    let active = true;
+    const normalizedCode = code.toUpperCase();
+
+    const loadManifest = async () => {
+      const localManifest = loadPaintingManifestLocally(normalizedCode);
+      if (localManifest && active) {
+        setManifest(localManifest);
+        setLoading(false);
+        return;
       }
-    } catch {
-      setError(true);
-    }
-    setLoading(false);
+
+      const { data, error: functionError } = await supabase.functions.invoke("get-painting-manifest", {
+        body: {
+          instructionCode: normalizedCode,
+        },
+      });
+
+      if (!active) return;
+
+      if (functionError || data?.error || !data?.manifest) {
+        setError(true);
+        setLoading(false);
+        return;
+      }
+
+      const remoteManifest = data.manifest as PaintingManifest;
+      setManifest(remoteManifest);
+      persistPaintingManifestLocally(remoteManifest);
+      setLoading(false);
+    };
+
+    void loadManifest();
+
+    return () => {
+      active = false;
+    };
   }, [code]);
 
-  const indices = viewerData ? new Uint8Array(viewerData.indices) : null;
-  const palette: StylePalette | null = viewerData
-    ? PALETTES[viewerData.paletteKey as keyof typeof PALETTES] || PALETTES[STYLE_KEYS[0]]
-    : null;
-
-  // Generate preview if not stored
-  const previewDataUrl = viewerData?.previewDataUrl || (() => {
-    if (!indices || !palette || !viewerData) return "";
-    const canvas = renderPixelGrid(indices, palette.colors, viewerData.gridCols, viewerData.gridRows, 6);
-    return canvas.toDataURL("image/png");
-  })();
+  const palette = useMemo(() => (manifest ? resolveManifestPalette(manifest) : null), [manifest]);
+  const activeReferenceUrl = referenceMode === "reference" || !manifest?.sourceImageUrl ? manifest?.referenceImageUrl : manifest.sourceImageUrl;
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Navbar />
       <div className="flex-1">
-        <div className="container mx-auto px-4 py-8">
+        <div className="container mx-auto px-4 py-8 md:py-12">
           {loading && (
-            <div className="flex flex-col items-center justify-center py-20">
+            <div className="flex flex-col items-center justify-center py-24">
               <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
-              <p className="text-muted-foreground">{vt.loading || "Chargement..."}</p>
+              <p className="text-muted-foreground">Loading your painting workspace...</p>
             </div>
           )}
 
@@ -83,9 +91,9 @@ const ViewerPage = () => {
                   <div className="mx-auto w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center">
                     <AlertCircle className="h-8 w-8 text-destructive" />
                   </div>
-                  <h2 className="text-xl font-bold">{vt.notFound || "Code introuvable"}</h2>
+                  <h2 className="text-xl font-bold">Viewer unavailable</h2>
                   <p className="text-sm text-muted-foreground">
-                    {vt.notFoundDesc || "Ce code d'instruction n'existe pas ou a expiré. Vérifiez le code et réessayez."}
+                    This instruction code could not be found. Check the code on your PDF or confirmation email and try again.
                   </p>
                   <p className="text-xs font-mono text-muted-foreground bg-muted rounded px-3 py-2">
                     {code?.toUpperCase() || "—"}
@@ -93,7 +101,7 @@ const ViewerPage = () => {
                   <Button asChild className="rounded-full">
                     <Link to="/">
                       <Home className="mr-2 h-4 w-4" />
-                      {vt.backHome || "Retour à l'accueil"}
+                      Back to home
                     </Link>
                   </Button>
                 </CardContent>
@@ -101,26 +109,133 @@ const ViewerPage = () => {
             </div>
           )}
 
-          {!loading && !error && viewerData && indices && palette && (
-            <div>
-              <div className="text-center mb-6">
-                <h1 className="text-xl md:text-2xl font-bold mb-1">
-                  {vt.title || "Vos instructions de peinture"}
-                </h1>
-                <p className="text-sm text-muted-foreground">
-                  {vt.subtitle || "Suivez les sections pour compléter votre œuvre d'art"}
-                </p>
-                <p className="text-xs font-mono text-muted-foreground mt-1">
-                  Code: {code?.toUpperCase()}
-                </p>
+          {!loading && !error && manifest && palette && (
+            <div className="space-y-6">
+              <Card className="overflow-hidden border-border">
+                <CardContent className="p-0">
+                  <div className="grid gap-0 lg:grid-cols-[360px_1fr]">
+                    <div className="bg-primary/5 p-5">
+                      <div className="rounded-[28px] overflow-hidden border border-primary/10 bg-background shadow-sm">
+                        <img src={manifest.referenceImageUrl} alt="Painting reference" className="w-full object-cover" />
+                      </div>
+                    </div>
+                    <div className="p-5 md:p-6">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="secondary">{manifest.canvasLabel}</Badge>
+                        <Badge variant="outline">{manifest.stats.colorCount} colors</Badge>
+                        <Badge variant="outline">{manifest.stats.totalSections} sections</Badge>
+                      </div>
+                      <h1 className="mt-4 text-2xl md:text-3xl font-bold">Helma Painting Workspace</h1>
+                      <p className="mt-2 text-sm text-muted-foreground max-w-2xl">
+                        This viewer follows the exact same painting manifest as your PDF guide, so the color letters, section numbering, and progress all stay aligned.
+                      </p>
+
+                      {manifest.dedicationText && (
+                        <div className="mt-4 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
+                          <div className="flex items-center gap-2 text-primary">
+                            <Heart className="h-4 w-4" />
+                            <span className="text-xs font-semibold uppercase tracking-[0.14em]">Dedication</span>
+                          </div>
+                          <p className="mt-2 text-sm font-medium">{manifest.dedicationText}</p>
+                        </div>
+                      )}
+
+                      <div className="mt-5 grid gap-3 md:grid-cols-4">
+                        <div className="rounded-xl border p-3">
+                          <div className="flex items-center gap-2 text-xs uppercase tracking-[0.12em] text-muted-foreground">
+                            <Layers className="h-3.5 w-3.5" /> Sections
+                          </div>
+                          <p className="mt-2 text-lg font-semibold">{manifest.stats.totalSections}</p>
+                        </div>
+                        <div className="rounded-xl border p-3">
+                          <div className="flex items-center gap-2 text-xs uppercase tracking-[0.12em] text-muted-foreground">
+                            <Palette className="h-3.5 w-3.5" /> Difficulty
+                          </div>
+                          <p className="mt-2 text-lg font-semibold">{manifest.stats.difficultyLabel}</p>
+                        </div>
+                        <div className="rounded-xl border p-3">
+                          <div className="flex items-center gap-2 text-xs uppercase tracking-[0.12em] text-muted-foreground">
+                            <Clock4 className="h-3.5 w-3.5" /> Time
+                          </div>
+                          <p className="mt-2 text-lg font-semibold">{manifest.stats.estimatedHours}</p>
+                        </div>
+                        <div className="rounded-xl border p-3">
+                          <div className="flex items-center gap-2 text-xs uppercase tracking-[0.12em] text-muted-foreground">
+                            <Truck className="h-3.5 w-3.5" /> Code
+                          </div>
+                          <p className="mt-2 text-lg font-semibold font-mono">{manifest.instructionCode}</p>
+                        </div>
+                      </div>
+
+                      <div className="mt-5 flex flex-wrap gap-3">
+                        {manifest.orderRef && (
+                          <Button asChild variant="outline" className="rounded-full gap-2">
+                            <Link to={buildTrackUrl(manifest.orderRef, manifest.instructionCode, window.location.origin).replace(window.location.origin, "")}>
+                              Track order
+                              <ExternalLink className="h-4 w-4" />
+                            </Link>
+                          </Button>
+                        )}
+                        <Badge variant="outline" className="rounded-full px-3 py-1 font-mono">
+                          {manifest.orderRef || manifest.instructionCode}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+                <div className="space-y-6">
+                  <GridViewer
+                    indices={new Uint8Array(manifest.indices)}
+                    gridCols={manifest.gridCols}
+                    gridRows={manifest.gridRows}
+                    palette={palette}
+                    previewDataUrl={manifest.previewDataUrl}
+                    progressKey={manifest.instructionCode}
+                  />
+                </div>
+
+                <div className="space-y-4">
+                  <Card className="border-border">
+                    <CardContent className="p-5">
+                      <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Reference Board</p>
+                      <Tabs value={referenceMode} onValueChange={(value) => setReferenceMode(value as "reference" | "source")} className="mt-4">
+                        <TabsList className="grid w-full grid-cols-2">
+                          <TabsTrigger value="reference">Paint reference</TabsTrigger>
+                          <TabsTrigger value="source" disabled={!manifest.sourceImageUrl}>
+                            Source image
+                          </TabsTrigger>
+                        </TabsList>
+                      </Tabs>
+                      <div className="mt-4 overflow-hidden rounded-2xl border bg-muted/30">
+                        {activeReferenceUrl ? (
+                          <img src={activeReferenceUrl} alt="Reference board" className="w-full object-cover" />
+                        ) : (
+                          <div className="min-h-80 flex items-center justify-center text-sm text-muted-foreground">
+                            Source image unavailable
+                          </div>
+                        )}
+                      </div>
+                      <p className="mt-3 text-sm text-muted-foreground">
+                        Keep the reference open while you paint. Use the section viewer on the left for precision and this panel for composition context.
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-border">
+                    <CardContent className="p-5">
+                      <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Painting Tips</p>
+                      <div className="mt-4 space-y-3 text-sm text-muted-foreground">
+                        <p>Start with lighter colors, then move to darker tones to keep the canvas clean.</p>
+                        <p>Use one section at a time and mark it complete in the viewer when you finish it.</p>
+                        <p>Switch between the reference and source image when you want help with details and overall composition.</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
               </div>
-              <GridViewer
-                indices={indices}
-                gridCols={viewerData.gridCols}
-                gridRows={viewerData.gridRows}
-                palette={palette}
-                previewDataUrl={previewDataUrl}
-              />
             </div>
           )}
         </div>

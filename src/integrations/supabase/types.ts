@@ -22,6 +22,7 @@ export type Database = {
           contact_first_name: string | null
           contact_phone: string | null
           created_at: string
+          dedication_text: string | null
           dream_job: string | null
           id: string
           kit_size: string | null
@@ -43,6 +44,7 @@ export type Database = {
           contact_first_name?: string | null
           contact_phone?: string | null
           created_at?: string
+          dedication_text?: string | null
           dream_job?: string | null
           id?: string
           kit_size?: string | null
@@ -64,6 +66,7 @@ export type Database = {
           contact_first_name?: string | null
           contact_phone?: string | null
           created_at?: string
+          dedication_text?: string | null
           dream_job?: string | null
           id?: string
           kit_size?: string | null
@@ -220,6 +223,7 @@ export type Database = {
           coupon_code: string | null
           created_at: string
           cropped_preview_url: string | null
+          dedication_text: string | null
           delivered_at: string | null
           discount_amount: number
           dream_job: string | null
@@ -252,6 +256,7 @@ export type Database = {
           coupon_code?: string | null
           created_at?: string
           cropped_preview_url?: string | null
+          dedication_text?: string | null
           delivered_at?: string | null
           discount_amount?: number
           dream_job?: string | null
@@ -284,6 +289,7 @@ export type Database = {
           coupon_code?: string | null
           created_at?: string
           cropped_preview_url?: string | null
+          dedication_text?: string | null
           delivered_at?: string | null
           discount_amount?: number
           dream_job?: string | null
