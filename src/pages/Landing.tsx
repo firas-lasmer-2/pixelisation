@@ -1,6 +1,7 @@
 import { Navbar } from "@/components/shared/Navbar";
 import { Hero } from "@/components/landing/Hero";
 import { CategoryShowcase } from "@/components/landing/CategoryShowcase";
+import { ProductShowcase } from "@/components/landing/ProductShowcase";
 import { HowItWorks } from "@/components/landing/HowItWorks";
 import { StyleShowcase } from "@/components/landing/StyleShowcase";
 import { KitExplainer } from "@/components/landing/KitExplainer";
@@ -19,6 +20,7 @@ const Landing = () => {
       <PromoBanner />
       <Navbar />
       <Hero />
+      <ProductShowcase />
       <CategoryShowcase />
       <HowItWorks />
       <StyleShowcase />

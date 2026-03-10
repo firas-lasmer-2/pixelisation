@@ -7,11 +7,13 @@ import { useOrder } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle, Home, Copy, FileText, Truck, Package, MapPin, Share2, Check, Gift, Users } from "lucide-react";
+import { CheckCircle, Home, Copy, FileText, Truck, Package, MapPin, Share2, Check, Gift, Users, Layers, Sparkles } from "lucide-react";
 import { RegenerationRequestForm } from "@/components/shared/RegenerationRequestForm";
 import { BRAND, buildTrackUrl } from "@/lib/brand";
 import { getKitDisplayLabel } from "@/lib/kitCatalog";
 import { getStyleLabel } from "@/lib/styles";
+import { PRODUCT_TYPE_META, STENCIL_DETAIL_META } from "@/lib/store";
+import { GLITTER_PALETTES } from "@/lib/glitterPalettes";
 
 function ConfettiParticle({ delay, color }: { delay: number; color: string }) {
   const left = Math.random() * 100;
@@ -87,7 +89,11 @@ const Confirmation = () => {
 
   const shareWhatsApp = () => {
     const sizeLabel = order.selectedSize ? getKitDisplayLabel(order.selectedSize) : "Kit";
-    const styleLabel = order.selectedStyle ? getStyleLabel(t, order.selectedStyle) : "Original";
+    const styleLabel = order.productType === "paint_by_numbers"
+      ? (order.selectedStyle ? getStyleLabel(t, order.selectedStyle) : "Original")
+      : order.productType === "stencil_paint"
+      ? (order.stencilDetailLevel ? STENCIL_DETAIL_META[order.stencilDetailLevel].label : PRODUCT_TYPE_META[order.productType].label)
+      : (order.glitterPalette ? GLITTER_PALETTES[order.glitterPalette].name : PRODUCT_TYPE_META[order.productType].label);
     const trackUrl = buildTrackUrl(order.orderRef, order.instructionCode, window.location.origin);
     const msg = [
       `🎨 Ma commande ${BRAND.name} est confirmée !`,
@@ -154,6 +160,15 @@ const Confirmation = () => {
                     </button>
                   </Badge>
                 </div>
+                {order.productType && order.productType !== "paint_by_numbers" && (
+                  <div className="flex items-center justify-between pt-2 border-t border-border">
+                    <span className="text-sm text-muted-foreground">Type de kit</span>
+                    <Badge variant="outline" className="gap-1">
+                      {order.productType === "glitter_reveal" ? <Sparkles className="h-3 w-3" /> : <Layers className="h-3 w-3" />}
+                      {PRODUCT_TYPE_META[order.productType].label}
+                    </Badge>
+                  </div>
+                )}
               </CardContent>
             </Card>
 

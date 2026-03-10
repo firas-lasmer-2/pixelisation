@@ -4,7 +4,7 @@ import { Area } from "react-easy-crop";
 import { Navbar } from "@/components/shared/Navbar";
 import { Footer } from "@/components/landing/Footer";
 import { useTranslation } from "@/i18n";
-import { useOrder, getPhoto, PRICING, TUNISIAN_GOVERNORATES, CATEGORY_META, DREAM_JOBS, ADD_ONS, type KitSize, type ArtStyle, type ContactInfo, type ShippingInfo, type OrderCategory } from "@/lib/store";
+import { useOrder, getPhoto, PRICING, TUNISIAN_GOVERNORATES, CATEGORY_META, DREAM_JOBS, ADD_ONS, getAvailableAddOns, STENCIL_DETAIL_META, type KitSize, type ArtStyle, type ContactInfo, type ShippingInfo, type OrderCategory, type ProductType, type StencilDetailLevel, type GlitterPalette } from "@/lib/store";
 import {
   DEFAULT_PUBLIC_KIT,
   KIT_TONE_STYLES,
@@ -20,6 +20,9 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { UploadZone } from "@/components/UploadZone";
 import { CategorySelector } from "@/components/studio/CategorySelector";
+import { ProductTypePicker } from "@/components/studio/ProductTypePicker";
+import { StencilDetailPicker } from "@/components/studio/StencilDetailPicker";
+import { GlitterPalettePicker } from "@/components/studio/GlitterPalettePicker";
 import { DreamJobPicker } from "@/components/studio/DreamJobPicker";
 import { MultiUploadZone } from "@/components/studio/MultiUploadZone";
 import { StylePreviewCard } from "@/components/studio/StylePreviewCard";
@@ -27,7 +30,9 @@ import { SaveProgressModal } from "@/components/shared/SaveProgressModal";
 import { CropScreen } from "@/components/CropScreen";
 import { ProcessingScreen } from "@/components/ProcessingScreen";
 import { processImage, ProcessingResult } from "@/lib/imageProcessing";
+import { processStencilImage, type StencilResult } from "@/lib/stencilProcessing";
 import { getStyleDefinition, getStyleDescription, getStyleLabel, orderStyleResults } from "@/lib/styles";
+import { GLITTER_PALETTES } from "@/lib/glitterPalettes";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -72,50 +77,41 @@ type StepMetaItem = {
   icon: typeof Sparkles;
 };
 
-const STEP_META_BY_CATEGORY: Record<OrderCategory, StepMetaItem[]> = {
-  classic: [
-    { label: "Expérience", icon: Sparkles },
-    { label: "Format", icon: Package },
-    { label: "Extras", icon: Gift },
-    { label: "Photo", icon: Upload },
-    { label: "Recadrage", icon: Camera },
-    { label: "Style", icon: Palette },
-    { label: "Commande", icon: CreditCard },
-  ],
-  family: [
-    { label: "Expérience", icon: Sparkles },
-    { label: "Format", icon: Package },
-    { label: "Extras", icon: Gift },
-    { label: "Photos", icon: Upload },
-    { label: "Fusion", icon: Wand2 },
-    { label: "Recadrage", icon: Camera },
-    { label: "Style", icon: Palette },
-    { label: "Commande", icon: CreditCard },
-  ],
-  kids_dream: [
-    { label: "Expérience", icon: Sparkles },
-    { label: "Format", icon: Package },
-    { label: "Extras", icon: Gift },
-    { label: "Photo", icon: Upload },
-    { label: "Magie", icon: Wand2 },
-    { label: "Recadrage", icon: Camera },
-    { label: "Style", icon: Palette },
-    { label: "Commande", icon: CreditCard },
-  ],
-  pet: [
-    { label: "Expérience", icon: Sparkles },
-    { label: "Format", icon: Package },
-    { label: "Extras", icon: Gift },
-    { label: "Photo", icon: Upload },
-    { label: "Portrait", icon: Wand2 },
-    { label: "Recadrage", icon: Camera },
-    { label: "Style", icon: Palette },
-    { label: "Commande", icon: CreditCard },
-  ],
+const STYLE_STEP_LABEL: Record<ProductType, StepMetaItem> = {
+  paint_by_numbers: { label: "Style", icon: Palette },
+  stencil_paint:    { label: "Détail", icon: Layers },
+  glitter_reveal:   { label: "Palette", icon: Sparkles },
 };
 
-function getStepMeta(category: OrderCategory) {
-  return STEP_META_BY_CATEGORY[category] || STEP_META_BY_CATEGORY.classic;
+function getStepMeta(category: OrderCategory, productType: ProductType = "paint_by_numbers"): StepMetaItem[] {
+  const styleStep = STYLE_STEP_LABEL[productType];
+  const isAI = category !== "classic";
+  if (!isAI) {
+    return [
+      { label: "Expérience", icon: Sparkles },
+      { label: "Format", icon: Package },
+      { label: "Extras", icon: Gift },
+      { label: "Photo", icon: Upload },
+      { label: "Recadrage", icon: Camera },
+      styleStep,
+      { label: "Commande", icon: CreditCard },
+    ];
+  }
+  const aiLabel =
+    category === "family"     ? "Fusion"   :
+    category === "kids_dream" ? "Magie"    :
+    "Portrait";
+  const uploadLabel = category === "family" ? "Photos" : "Photo";
+  return [
+    { label: "Expérience", icon: Sparkles },
+    { label: "Format", icon: Package },
+    { label: "Extras", icon: Gift },
+    { label: uploadLabel, icon: Upload },
+    { label: aiLabel, icon: Wand2 },
+    { label: "Recadrage", icon: Camera },
+    styleStep,
+    { label: "Commande", icon: CreditCard },
+  ];
 }
 
 
@@ -188,11 +184,12 @@ const Studio = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const resumeSessionId = searchParams.get("resume")?.trim() || null;
-  const { order, setCategory, setPhoto, removePhoto, setCroppedArea, setStyle, setSize, setAddOns, setContact, setShipping, setGift, setDedicationText, setDreamJob, setAiGeneratedUrl, confirmOrder } = useOrder();
+  const { order, setCategory, setProductType, setPhoto, removePhoto, setCroppedArea, setStyle, setStylePreviewUrl, setSize, setAddOns, setStencilDetailLevel, setGlitterPalette, setContact, setShipping, setGift, setDedicationText, setDreamJob, setAiGeneratedUrl, confirmOrder } = useOrder();
   const [step, setStep] = useState(1);
   const [processing, setProcessing] = useState(false);
   const [aiGenerating, setAiGenerating] = useState(false);
   const [previews, setPreviews] = useState<{ style: ArtStyle; results: ProcessingResult[]; previewUrl: string }[]>([]);
+  const [stencilPreviews, setStencilPreviews] = useState<Partial<Record<StencilDetailLevel, string>>>({});
   const [slideDir, setSlideDir] = useState<"left" | "right">("right");
   const [animKey, setAnimKey] = useState(0);
   const [showSaveModal, setShowSaveModal] = useState(false);
@@ -219,20 +216,25 @@ const Studio = () => {
   const lastTrackedStepRef = useRef<number | null>(null);
   const lastPhotoCountRef = useRef(0);
 
-  // URL-based category
+  // URL-based category / product type
   useEffect(() => {
     if (resumeSessionId) return;
     const cat = searchParams.get("category");
+    const product = searchParams.get("product");
     if (cat && ["classic", "family", "kids_dream", "pet"].includes(cat)) {
       setCategory(cat as OrderCategory);
       setStep(2); // Skip category selection
     }
-  }, [resumeSessionId, searchParams, setCategory]);
+    if (product && ["paint_by_numbers", "stencil_paint", "glitter_reveal"].includes(product)) {
+      setProductType(product as ProductType);
+    }
+  }, [resumeSessionId, searchParams, setCategory, setProductType]);
 
-  // Compute step meta based on category
-  const stepMeta = getStepMeta(order.category);
+  // Compute step meta based on category and product type
+  const stepMeta = getStepMeta(order.category, order.productType);
   const totalSteps = stepMeta.length;
   const isAICategory = order.category !== "classic";
+  const isStencilProduct = order.productType === "stencil_paint" || order.productType === "glitter_reveal";
 
   // Map logical steps to what we show
   // For classic: 1=Category, 2=Kit, 3=Upload, 4=Crop, 5=Style, 6=Confirm
@@ -295,8 +297,21 @@ const Studio = () => {
         setCategory(nextCategory as OrderCategory);
       }
 
+      const nextProductType = cart.productType;
+      if (nextProductType && ["paint_by_numbers", "stencil_paint", "glitter_reveal"].includes(nextProductType)) {
+        setProductType(nextProductType as ProductType);
+      }
+
       if (isKitSize(cart.selectedSize)) {
         setSize(cart.selectedSize);
+      }
+
+      if (cart.stencilDetailLevel && ["bold", "medium", "fine"].includes(cart.stencilDetailLevel)) {
+        setStencilDetailLevel(cart.stencilDetailLevel as StencilDetailLevel);
+      }
+
+      if (cart.glitterPalette && ["mercury", "mars", "neptune", "jupiter"].includes(cart.glitterPalette)) {
+        setGlitterPalette(cart.glitterPalette as GlitterPalette);
       }
 
       if (cart.dreamJob) {
@@ -351,7 +366,7 @@ const Studio = () => {
     return () => {
       active = false;
     };
-  }, [resumeSessionId, sessionId, setCategory, setContact, setDedicationText, setDreamJob, setSize]);
+  }, [resumeSessionId, sessionId, setCategory, setProductType, setStencilDetailLevel, setGlitterPalette, setContact, setDedicationText, setDreamJob, setSize]);
 
   useEffect(() => {
     const photo = getPhoto(order);
@@ -364,6 +379,9 @@ const Studio = () => {
           art_style: order.selectedStyle || null,
           photo_uploaded: !!photo,
           category: order.category,
+          product_type: order.productType,
+          stencil_detail_level: order.stencilDetailLevel || null,
+          glitter_palette: order.glitterPalette || null,
           dream_job: order.dreamJob || null,
           dedication_text: order.dedicationText || null,
           contact_phone: contactForm.phone.replace(/\D/g, "").length === 8 ? contactForm.phone : null,
@@ -374,7 +392,7 @@ const Studio = () => {
     };
     const timer = setTimeout(save, 2000);
     return () => clearTimeout(timer);
-  }, [step, order.selectedSize, order.selectedStyle, order.photos, order.category, order.dreamJob, order.dedicationText, contactForm.phone, contactForm.email, contactForm.firstName, sessionId]);
+  }, [step, order.selectedSize, order.selectedStyle, order.photos, order.category, order.productType, order.stencilDetailLevel, order.glitterPalette, order.dreamJob, order.dedicationText, contactForm.phone, contactForm.email, contactForm.firstName, sessionId]);
 
   useEffect(() => {
     if (lastTrackedStepRef.current === step) return;
@@ -482,14 +500,30 @@ const Studio = () => {
     const imgKitSize = resolveProcessingKitSize(order.selectedSize);
 
     try {
-      const results = await processImage(photo, croppedArea, imgKitSize);
-      const allPreviews: typeof previews = orderStyleResults(results).map((result) => ({
-        style: result.styleKey,
-        results: [result],
-        previewUrl: result.dataUrl,
-      }));
+      if (isStencilProduct) {
+        // Process all 3 detail levels in parallel for stencil products
+        const detailLevels: StencilDetailLevel[] = ["bold", "medium", "fine"];
+        const results = await Promise.all(
+          detailLevels.map((level) => processStencilImage(photo, croppedArea, imgKitSize, level))
+        );
+        const previewMap: Partial<Record<StencilDetailLevel, string>> = {};
+        results.forEach((r) => { previewMap[r.detailLevel] = r.dataUrl; });
+        setStencilPreviews(previewMap);
+        const activeDetailLevel = order.stencilDetailLevel || "medium";
+        if (!order.stencilDetailLevel) {
+          setStencilDetailLevel(activeDetailLevel);
+        }
+        setStylePreviewUrl(previewMap[activeDetailLevel] || results[0]?.dataUrl || "");
+      } else {
+        const results = await processImage(photo, croppedArea, imgKitSize);
+        const allPreviews: typeof previews = orderStyleResults(results).map((result) => ({
+          style: result.styleKey,
+          results: [result],
+          previewUrl: result.dataUrl,
+        }));
+        setPreviews(allPreviews);
+      }
 
-      setPreviews(allPreviews);
       setProcessing(false);
       void trackFunnelEvent({
         sessionId,
@@ -499,15 +533,15 @@ const Studio = () => {
         metadata: {
           selectedSize: order.selectedSize,
           fromAi: Boolean(order.aiGeneratedUrl),
+          productType: order.productType,
         },
       });
-      // For AI categories, the style step is one more
       goToStep(isAICategory ? 7 : 6);
     } catch (err) {
       console.error("Processing failed:", err);
       setProcessing(false);
     }
-  }, [order.photos, order.aiGeneratedUrl, order.selectedSize, order.category, setCroppedArea]);
+  }, [order.photos, order.aiGeneratedUrl, order.selectedSize, order.category, order.productType, order.stencilDetailLevel, isStencilProduct, isAICategory, setCroppedArea, setStencilDetailLevel, setStylePreviewUrl]);
 
   /* AI Generation */
   const handleAIGenerate = async () => {
@@ -630,7 +664,8 @@ const Studio = () => {
         message === "Invalid JSON body" ? "Les photos envoyées sont invalides. Réessayez avec des images plus légères." :
         message === "Missing valid contact details" ? "Vérifiez votre prénom, nom et numéro de téléphone." :
         message === "Missing shipping details" ? "Ajoutez l'adresse, la ville et le gouvernorat de livraison." :
-        message === "Missing selected size or style" ? "Choisissez une taille et un style avant de confirmer." :
+        message === "ORDER_INVALID_SIZE" || message === "Missing selected size" || message === "Order is missing size" ? "Choisissez une taille avant de confirmer." :
+        message === "ORDER_INVALID_STYLE" || message === "Missing selected style for paint by numbers" || message === "Order is missing style" || message === "Missing selected size or style" ? "Choisissez un style avant de confirmer." :
         message;
 
       setPromoError(message.startsWith("COUPON_") ? friendly : "");
@@ -649,6 +684,13 @@ const Studio = () => {
     d.setDate(d.getDate() + 7);
     return d.toLocaleDateString(t.lang === "ar" ? "ar-TN" : "fr-TN", { day: "numeric", month: "long" });
   };
+
+  const selectionSummaryTitle = order.productType === "paint_by_numbers" ? "Style" : order.productType === "stencil_paint" ? "Détail" : "Palette";
+  const selectionSummaryValue = order.productType === "paint_by_numbers"
+    ? (order.selectedStyle ? getStyleLabel(t, order.selectedStyle) : "-")
+    : order.productType === "stencil_paint"
+    ? (order.stencilDetailLevel ? STENCIL_DETAIL_META[order.stencilDetailLevel].label : "-")
+    : (order.glitterPalette ? GLITTER_PALETTES[order.glitterPalette].name : "-");
 
   const isConfirmValid = contactForm.firstName && contactForm.lastName &&
     contactForm.phone.replace(/\D/g, "").length === 8 &&
@@ -730,15 +772,24 @@ const Studio = () => {
                   STEP 1: Choose Category
                  ═══════════════════════════════════════════ */}
               {step === 1 && (
-                <div>
-                  <SectionHeading
-                    title="Choisissez votre expérience"
-                    subtitle="Sélectionnez le type de création qui vous inspire."
-                  />
+                <div className="space-y-10">
+                  <div>
+                    <SectionHeading
+                      title="Choisissez votre technique"
+                      subtitle="Trois façons uniques de transformer votre photo en œuvre d'art."
+                    />
+                    <ProductTypePicker selected={order.productType} onSelect={(type) => setProductType(type)} />
+                  </div>
 
-                  <CategorySelector selected={order.category} onSelect={(cat) => setCategory(cat)} />
+                  <div>
+                    <SectionHeading
+                      title="Choisissez votre sujet"
+                      subtitle="Qui sera au cœur de votre création ?"
+                    />
+                    <CategorySelector selected={order.category} onSelect={(cat) => setCategory(cat)} />
+                  </div>
 
-                  <div className="flex justify-end mt-8">
+                  <div className="flex justify-end">
                     <Button
                       onClick={() => goToStep(2)}
                       className="gap-2 btn-premium text-primary-foreground border-0 px-8"
@@ -916,7 +967,7 @@ const Studio = () => {
                   />
 
                   <div className="grid gap-4 sm:grid-cols-3">
-                    {ADD_ONS.map((addon) => {
+                    {getAvailableAddOns(order.productType).map((addon) => {
                       const isSelected = order.addOns.includes(addon.id);
                       return (
                         <button
@@ -1175,49 +1226,94 @@ const Studio = () => {
               {processing && <ProcessingScreen />}
 
               {/* ═══════════════════════════════════════════
-                  STYLE Step
+                  STYLE / DETAIL / PALETTE Step
                  ═══════════════════════════════════════════ */}
               {step === getStyleStep() && (
                 <div>
-                  <SectionHeading
-                    title={t.studio.step2.title}
-                    subtitle={t.studio.step2.subtitle}
-                  />
+                  {order.productType === "stencil_paint" && (
+                    <>
+                      <SectionHeading
+                        title="Choisissez le niveau de détail"
+                        subtitle="Plus de détail = plus de finesse dans les contours du pochoir."
+                      />
+                      <StencilDetailPicker
+                        selected={order.stencilDetailLevel}
+                        onSelect={(level) => { setStencilDetailLevel(level); setStylePreviewUrl(stencilPreviews[level] || ""); }}
+                        previewDataUrls={stencilPreviews}
+                      />
+                      <div className="mt-8 flex gap-3">
+                        <Button variant="outline" onClick={() => goToStep(getCropStep())} className="gap-2">
+                          <BackIcon className="h-4 w-4" /> {t.studio.back}
+                        </Button>
+                        <Button onClick={() => goToStep(getConfirmStep())} disabled={!order.stencilDetailLevel} className="flex-1 gap-2 btn-premium text-primary-foreground border-0">
+                          {t.studio.next} <NextIcon className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </>
+                  )}
 
-                  <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-5">
-                    {previews.map((p, i) => {
-                      const isSelected = order.selectedStyle === p.style;
-                      const styleName = getStyleLabel(t, p.style);
-                      const styleDesc = getStyleDescription(t, p.style);
-                      const styleMeta = getStyleDefinition(p.style);
-                      const palette = p.results[0]?.palette;
-                      if (!palette) return null;
+                  {order.productType === "glitter_reveal" && (
+                    <>
+                      <SectionHeading
+                        title="Choisissez votre palette de paillettes"
+                        subtitle="Quelle ambiance souhaitez-vous pour votre révélation ?"
+                      />
+                      <GlitterPalettePicker
+                        selected={order.glitterPalette}
+                        onSelect={(palette) => setGlitterPalette(palette)}
+                      />
+                      <div className="mt-8 flex gap-3">
+                        <Button variant="outline" onClick={() => goToStep(getCropStep())} className="gap-2">
+                          <BackIcon className="h-4 w-4" /> {t.studio.back}
+                        </Button>
+                        <Button onClick={() => goToStep(getConfirmStep())} disabled={!order.glitterPalette} className="flex-1 gap-2 btn-premium text-primary-foreground border-0">
+                          {t.studio.next} <NextIcon className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </>
+                  )}
 
-                      return (
-                        <div key={p.style} style={{ animationDelay: `${i * 100}ms` }}>
-                          <StylePreviewCard
-                            badgeLabel={styleMeta.badgeLabel}
-                            colorCountLabel={`${palette.colors.length} ${t.viewer.colors}`}
-                            isSelected={isSelected}
-                            onSelect={() => setStyle(p.style, p.previewUrl)}
-                            palette={palette}
-                            previewUrl={p.previewUrl}
-                            styleDescription={styleDesc}
-                            styleName={styleName}
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
+                  {order.productType === "paint_by_numbers" && (
+                    <>
+                      <SectionHeading
+                        title={t.studio.step2.title}
+                        subtitle={t.studio.step2.subtitle}
+                      />
+                      <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-5">
+                        {previews.map((p, i) => {
+                          const isSelected = order.selectedStyle === p.style;
+                          const styleName = getStyleLabel(t, p.style);
+                          const styleDesc = getStyleDescription(t, p.style);
+                          const styleMeta = getStyleDefinition(p.style);
+                          const palette = p.results[0]?.palette;
+                          if (!palette) return null;
 
-                  <div className="mt-8 flex gap-3">
-                    <Button variant="outline" onClick={() => goToStep(getCropStep())} className="gap-2">
-                      <BackIcon className="h-4 w-4" /> {t.studio.back}
-                    </Button>
-                    <Button onClick={() => goToStep(getConfirmStep())} disabled={!order.selectedStyle} className="flex-1 gap-2 btn-premium text-primary-foreground border-0">
-                      {t.studio.next} <NextIcon className="h-4 w-4" />
-                    </Button>
-                  </div>
+                          return (
+                            <div key={p.style} style={{ animationDelay: `${i * 100}ms` }}>
+                              <StylePreviewCard
+                                badgeLabel={styleMeta.badgeLabel}
+                                colorCountLabel={`${palette.colors.length} ${t.viewer.colors}`}
+                                isSelected={isSelected}
+                                onSelect={() => setStyle(p.style, p.previewUrl)}
+                                palette={palette}
+                                previewUrl={p.previewUrl}
+                                styleDescription={styleDesc}
+                                styleName={styleName}
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="mt-8 flex gap-3">
+                        <Button variant="outline" onClick={() => goToStep(getCropStep())} className="gap-2">
+                          <BackIcon className="h-4 w-4" /> {t.studio.back}
+                        </Button>
+                        <Button onClick={() => goToStep(getConfirmStep())} disabled={!order.selectedStyle} className="flex-1 gap-2 btn-premium text-primary-foreground border-0">
+                          {t.studio.next} <NextIcon className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -1376,11 +1472,9 @@ const Studio = () => {
                               </div>
                             )}
                             <div className="flex items-center justify-between text-sm">
-                              <span className="text-muted-foreground">Style</span>
+                              <span className="text-muted-foreground">{selectionSummaryTitle}</span>
                               <div className="flex items-center gap-2">
-                                <span className="font-medium">
-                                  {order.selectedStyle ? getStyleLabel(t, order.selectedStyle) : "-"}
-                                </span>
+                                <span className="font-medium">{selectionSummaryValue}</span>
                                 <button onClick={() => goToStep(getStyleStep())} className="text-primary hover:text-primary/70 transition-colors"><Edit3 className="h-3 w-3" /></button>
                               </div>
                             </div>

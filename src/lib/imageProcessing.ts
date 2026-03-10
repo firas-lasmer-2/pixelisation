@@ -66,7 +66,7 @@ function findNearestColor(r: number, g: number, b: number, palette: PaletteColor
   return nearestIdx;
 }
 
-function sigmoidContrast(data: Uint8ClampedArray, width: number, height: number, sigmoidK = 8): void {
+export function sigmoidContrast(data: Uint8ClampedArray, width: number, height: number, sigmoidK = 8): void {
   const total = width * height;
   const luminances = new Float32Array(total);
 
@@ -152,7 +152,7 @@ function laplacianSharpen(data: Uint8ClampedArray, width: number, height: number
   }
 }
 
-function bilateralFilter(
+export function bilateralFilter(
   data: Uint8ClampedArray,
   width: number,
   height: number,
@@ -201,7 +201,7 @@ function bilateralFilter(
   }
 }
 
-function computeEdgeMap(data: Uint8ClampedArray, width: number, height: number): Float32Array {
+export function computeEdgeMap(data: Uint8ClampedArray, width: number, height: number): Float32Array {
   const edges = new Float32Array(width * height);
 
   for (let y = 1; y < height - 1; y++) {
@@ -393,7 +393,7 @@ function adaptiveDenoise(
   }
 }
 
-function progressiveDownscale(img: HTMLImageElement | HTMLCanvasElement, cols: number, rows: number): ImageData {
+export function progressiveDownscale(img: HTMLImageElement | HTMLCanvasElement, cols: number, rows: number): ImageData {
   const srcW = img instanceof HTMLImageElement ? img.naturalWidth : img.width;
   const srcH = img instanceof HTMLImageElement ? img.naturalHeight : img.height;
 

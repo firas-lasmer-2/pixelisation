@@ -24,10 +24,11 @@ function createManifest(overrides: Partial<PaintingManifest> = {}): PaintingMani
   const paletteSnapshot = resolvePaletteForProcessing("watercolor", "30x40");
 
   return {
-    version: 4,
+    version: 5,
     orderRef: "HL-TEST",
     instructionCode: "ABC123",
     category: "classic",
+    productType: "paint_by_numbers",
     kitSize: "stamp_kit_30x40",
     canvasLabel: "30 x 40 cm",
     artStyle: "watercolor",
@@ -45,6 +46,9 @@ function createManifest(overrides: Partial<PaintingManifest> = {}): PaintingMani
     gridCols: 2,
     gridRows: 2,
     indices: [0, 1, 2, 3],
+    stencilDetailLevel: null,
+    stencilBridgeCount: null,
+    glitterPalette: null,
     stats: {
       totalCells: 4,
       totalSections: 1,
@@ -74,12 +78,12 @@ describe("paintingManifest", () => {
       paletteSnapshot,
     }), "ABC123");
 
-    expect(manifest?.version).toBe(4);
+    expect(manifest?.version).toBe(5);
     expect(resolveManifestPalette(manifest!).colors).toHaveLength(10);
     expect(manifest?.styleProfileKey).toBe("watercolor");
   });
 
-  it("upgrades legacy v3 manifests to version 4 while keeping legacy palettes", () => {
+  it("upgrades legacy v3 manifests to version 5 while keeping legacy palettes", () => {
     const manifest = normalizePaintingManifest({
       version: 3,
       orderRef: "HL-OLD",
@@ -112,7 +116,7 @@ describe("paintingManifest", () => {
       },
     }, "OLD123");
 
-    expect(manifest?.version).toBe(4);
+    expect(manifest?.version).toBe(5);
     expect(manifest?.artStyle).toBe("pop_art");
     expect(manifest?.paletteSnapshot.colors).toHaveLength(resolveLegacyPalette("pop_art").colors.length);
     expect(manifest?.stats.colorCount).toBe(8);

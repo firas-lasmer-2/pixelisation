@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -9,7 +9,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { OrderDetailSheet } from "@/components/admin/OrderDetailSheet";
-import { Search, RefreshCw, Download, Printer, CalendarIcon, X } from "lucide-react";
+import { Search, RefreshCw, Download, Printer, CalendarIcon, X, Layers, Sparkles, Paintbrush } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { getKitDisplayLabel } from "@/lib/kitCatalog";
@@ -72,12 +72,21 @@ function printShippingLabels(orders: Order[]) {
   }
 }
 
+type ProductTypeFilter = "all" | "paint_by_numbers" | "stencil_paint" | "glitter_reveal";
+
+const PRODUCT_TYPE_ICONS: Record<string, React.ReactNode> = {
+  stencil_paint: <Paintbrush className="h-3 w-3" />,
+  glitter_reveal: <Sparkles className="h-3 w-3" />,
+  paint_by_numbers: <Layers className="h-3 w-3" />,
+};
+
 export default function AdminOrders() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<OrderStatus | "all">("all");
   const [govFilter, setGovFilter] = useState<string>("all");
+  const [productTypeFilter, setProductTypeFilter] = useState<ProductTypeFilter>("all");
   const [dateFrom, setDateFrom] = useState<Date | undefined>();
   const [dateTo, setDateTo] = useState<Date | undefined>();
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -104,6 +113,10 @@ export default function AdminOrders() {
   const filtered = useMemo(() => orders.filter((o) => {
     if (statusFilter !== "all" && o.status !== statusFilter) return false;
     if (govFilter !== "all" && o.shipping_governorate !== govFilter) return false;
+    if (productTypeFilter !== "all") {
+      const pt = ((o as Record<string, unknown>).product_type as string) || "paint_by_numbers";
+      if (pt !== productTypeFilter) return false;
+    }
     if (dateFrom && new Date(o.created_at) < dateFrom) return false;
     if (dateTo) {
       const end = new Date(dateTo);
@@ -120,7 +133,7 @@ export default function AdminOrders() {
       );
     }
     return true;
-  }), [orders, statusFilter, govFilter, dateFrom, dateTo, search]);
+  }), [orders, statusFilter, govFilter, productTypeFilter, dateFrom, dateTo, search]);
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
@@ -139,10 +152,11 @@ export default function AdminOrders() {
   };
 
   const selectedOrders = filtered.filter((o) => selectedIds.has(o.id));
-  const hasActiveFilters = govFilter !== "all" || !!dateFrom || !!dateTo;
+  const hasActiveFilters = govFilter !== "all" || productTypeFilter !== "all" || !!dateFrom || !!dateTo;
 
   const clearFilters = () => {
     setGovFilter("all");
+    setProductTypeFilter("all");
     setDateFrom(undefined);
     setDateTo(undefined);
     setSearch("");
@@ -214,6 +228,18 @@ export default function AdminOrders() {
           </SelectContent>
         </Select>
 
+        <Select value={productTypeFilter} onValueChange={(v) => setProductTypeFilter(v as ProductTypeFilter)}>
+          <SelectTrigger className="w-44 h-8 text-xs">
+            <SelectValue placeholder="Product Type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Types</SelectItem>
+            <SelectItem value="paint_by_numbers">Paint by Numbers</SelectItem>
+            <SelectItem value="stencil_paint">Stencil Paint</SelectItem>
+            <SelectItem value="glitter_reveal">Glitter Reveal</SelectItem>
+          </SelectContent>
+        </Select>
+
         <Popover>
           <PopoverTrigger asChild>
             <Button variant="outline" size="sm" className={cn("gap-2 text-xs h-8", !dateFrom && "text-muted-foreground")}>
@@ -265,6 +291,7 @@ export default function AdminOrders() {
                 <TableHead>Governorate</TableHead>
                 <TableHead>Size</TableHead>
                 <TableHead>Category</TableHead>
+                <TableHead>Type</TableHead>
                 <TableHead>Price</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Date</TableHead>
@@ -273,7 +300,7 @@ export default function AdminOrders() {
             <TableBody>
               {filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center py-10 text-muted-foreground">
+                  <TableCell colSpan={11} className="text-center py-10 text-muted-foreground">
                     No orders found
                   </TableCell>
                 </TableRow>
@@ -297,6 +324,14 @@ export default function AdminOrders() {
                     <TableCell className="text-xs">{getKitDisplayLabel(o.kit_size)}</TableCell>
                     <TableCell>
                       <Badge variant="outline" className="text-[10px]">{(o as any).category || "classic"}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      {((pt: string) => pt === "paint_by_numbers" ? null : (
+                        <Badge variant="secondary" className="text-[10px] gap-1">
+                          {PRODUCT_TYPE_ICONS[pt]}
+                          {pt === "stencil_paint" ? "Stencil" : "Glitter"}
+                        </Badge>
+                      ))(((o as Record<string, unknown>).product_type as string) || "paint_by_numbers")}
                     </TableCell>
                     <TableCell className="text-sm font-medium">{o.total_price} DT</TableCell>
                     <TableCell>

@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Navbar } from "@/components/shared/Navbar";
 import { Footer } from "@/components/landing/Footer";
 import { useTranslation } from "@/i18n";
-import { useOrder, getPhoto } from "@/lib/store";
+import { useOrder, getPhoto, PRODUCT_TYPE_META, STENCIL_DETAIL_META } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +12,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { generatePaintByNumbersPDF } from "@/lib/pdfGenerator";
+import { generateStencilGuide } from "@/lib/stencilGuideGenerator";
 import { processImage, type ProcessingResult } from "@/lib/imageProcessing";
+import { processStencilImage, type StencilResult } from "@/lib/stencilProcessing";
 import { GridViewer } from "@/components/GridViewer";
 import {
   buildPaintingManifest,
@@ -28,6 +30,7 @@ import {
   sanitizeDedicationText,
 } from "@/lib/dedicationOverlay";
 import { buildViewerUrl, BRAND } from "@/lib/brand";
+import { GLITTER_PALETTES } from "@/lib/glitterPalettes";
 import { getStyleLabel } from "@/lib/styles";
 import { getKitConfig, resolveProcessingKitSize } from "@/lib/kitCatalog";
 import { supabase } from "@/integrations/supabase/client";
@@ -58,7 +61,7 @@ const Download = () => {
   const [progress, setProgress] = useState(0);
   const [progressLabel, setProgressLabel] = useState("");
   const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
-  const [processingResult, setProcessingResult] = useState<ProcessingResult | null>(null);
+  const [processingResult, setProcessingResult] = useState<ProcessingResult | StencilResult | null>(null);
   const [paintingManifest, setPaintingManifest] = useState<PaintingManifest | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dedicationOpen, setDedicationOpen] = useState(false);
@@ -66,30 +69,46 @@ const Download = () => {
   const [savingDedication, setSavingDedication] = useState(false);
 
   const dl = t.download;
+  const isPaintByNumbers = order.productType === "paint_by_numbers";
+  const hasRequiredConfiguration = Boolean(
+    getPhoto(order) &&
+    order.selectedSize &&
+    order.croppedArea &&
+    (isPaintByNumbers ? order.selectedStyle : true) &&
+    (order.productType !== "glitter_reveal" || order.glitterPalette)
+  );
 
   useEffect(() => {
-    if (!getPhoto(order) || !order.selectedStyle || !order.selectedSize || !order.croppedArea) {
+    if (!hasRequiredConfiguration) {
       navigate("/studio");
     }
-  }, [order, navigate]);
+  }, [hasRequiredConfiguration, navigate]);
 
   const selectedKit = order.selectedSize ? getKitConfig(order.selectedSize) : null;
   const kitSize = resolveProcessingKitSize(order.selectedSize);
   const canvasLabel = selectedKit?.displayLabel || "";
-  const selectedStyleLabel = order.selectedStyle ? getStyleLabel(t, order.selectedStyle) : "-";
+  const selectedStyleLabel = useMemo(() => {
+    if (order.productType === "paint_by_numbers") {
+      return order.selectedStyle ? getStyleLabel(t, order.selectedStyle) : "-";
+    }
+    if (order.productType === "stencil_paint") {
+      return order.stencilDetailLevel ? STENCIL_DETAIL_META[order.stencilDetailLevel].label : PRODUCT_TYPE_META[order.productType].label;
+    }
+    return order.glitterPalette ? GLITTER_PALETTES[order.glitterPalette].name : PRODUCT_TYPE_META[order.productType].label;
+  }, [order.productType, order.selectedStyle, order.stencilDetailLevel, order.glitterPalette, t]);
   const viewerPath = order.instructionCode ? buildViewerUrl(order.instructionCode, window.location.origin).replace(window.location.origin, "") : "";
   const sanitizedSavedDedication = useMemo(() => sanitizeDedicationText(order.dedicationText), [order.dedicationText]);
   const sanitizedDraftDedication = useMemo(() => sanitizeDedicationText(dedicationDraft), [dedicationDraft]);
   const hasDedication = Boolean(sanitizedDraftDedication || paintingManifest?.dedication?.text);
   const dedicationDirty = sanitizedDraftDedication !== sanitizedSavedDedication;
 
-  const sourceForProcessing = useMemo(() => order.aiGeneratedUrl || getPhoto(order), [order.aiGeneratedUrl, order.photos]);
+  const sourceForProcessing = order.aiGeneratedUrl || getPhoto(order);
 
   useEffect(() => {
     setDedicationDraft(order.dedicationText || "");
   }, [order.dedicationText]);
 
-  const processIfNeeded = async (): Promise<ProcessingResult> => {
+  const processIfNeeded = async (): Promise<ProcessingResult | StencilResult> => {
     if (processingResult) return processingResult;
 
     const cropData = {
@@ -98,6 +117,17 @@ const Download = () => {
       width: Math.round(order.croppedArea!.width),
       height: Math.round(order.croppedArea!.height),
     };
+
+    if (!isPaintByNumbers) {
+      const stencilResult = await processStencilImage(
+        sourceForProcessing,
+        cropData,
+        kitSize,
+        order.stencilDetailLevel || "medium",
+      );
+      setProcessingResult(stencilResult);
+      return stencilResult;
+    }
 
     const results = await processImage(sourceForProcessing, cropData, kitSize);
     const selectedResult = results.find((result) => result.styleKey === orderStyleToPaletteKey(order.selectedStyle!)) || results[0];
@@ -174,7 +204,7 @@ const Download = () => {
   };
 
   const handleGenerate = async () => {
-    if (!getPhoto(order) || !order.selectedStyle || !order.croppedArea) return;
+    if (!hasRequiredConfiguration) return;
     setGenerating(true);
     setProgress(0);
     setError(null);
@@ -185,7 +215,9 @@ const Download = () => {
       const manifest = await commitDedication();
       setProgressLabel(dl.progressSteps[1]);
       setProgress(55);
-      const blob = await generatePaintByNumbersPDF(manifest);
+      const blob = manifest.productType === "paint_by_numbers"
+        ? await generatePaintByNumbersPDF(manifest)
+        : await generateStencilGuide(manifest);
       setProgressLabel(dl.progressSteps[2]);
       setProgress(100);
       setPdfBlob(blob);
@@ -251,6 +283,13 @@ const Download = () => {
 
   const activeManifest = paintingManifest;
   const previewImageUrl = activeManifest?.referenceImageUrl || order.stylePreviewUrl || "";
+  const viewerPalette = useMemo(() => {
+    if (!activeManifest) return null;
+    if (processingResult && "palette" in processingResult) {
+      return processingResult.palette;
+    }
+    return resolveManifestPalette(activeManifest);
+  }, [activeManifest, processingResult]);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -284,6 +323,7 @@ const Download = () => {
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge variant="secondary">{canvasLabel}</Badge>
                       <Badge variant="outline">{selectedStyleLabel}</Badge>
+                      {!isPaintByNumbers && <Badge variant="secondary">{PRODUCT_TYPE_META[order.productType].label}</Badge>}
                       {activeManifest && <Badge variant="outline">{activeManifest.stats.totalSections} sections</Badge>}
                       {activeManifest && <Badge variant="outline">{activeManifest.stats.colorCount} colors</Badge>}
                       {hasDedication && (
@@ -528,7 +568,7 @@ const Download = () => {
                           indices={new Uint8Array(activeManifest.indices)}
                           gridCols={activeManifest.gridCols}
                           gridRows={activeManifest.gridRows}
-                          palette={processingResult?.palette || resolveManifestPalette(activeManifest)}
+                          palette={viewerPalette || resolveManifestPalette(activeManifest)}
                           previewDataUrl={activeManifest.previewDataUrl}
                           progressKey={activeManifest.instructionCode}
                         />

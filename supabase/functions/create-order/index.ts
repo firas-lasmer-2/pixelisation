@@ -12,13 +12,20 @@ const PRICING: Record<string, number> = {
   stamp_kit_A2: 399,
 };
 
+type ProductType = "paint_by_numbers" | "stencil_paint" | "glitter_reveal";
+type StencilDetailLevel = "bold" | "medium" | "fine";
+type GlitterPalette = "mercury" | "mars" | "neptune" | "jupiter";
+
 type CreateOrderPayload = {
   category: string;
   photos: string[];
   aiGeneratedUrl?: string;
   generationRunId?: string;
-  selectedStyle: string;
+  selectedStyle?: string | null;
   selectedSize: string;
+  productType?: ProductType | null;
+  stencilDetailLevel?: StencilDetailLevel | null;
+  glitterPalette?: GlitterPalette | null;
   contact: {
     firstName: string;
     lastName: string;
@@ -182,9 +189,14 @@ serve(async (req) => {
       : [];
     const sizePrice = PRICING[payload.selectedSize];
     const phone = normalizePhone(payload.contact?.phone || "");
+    const productType: ProductType = payload.productType || "paint_by_numbers";
 
-    if (!payload.selectedSize || !payload.selectedStyle || !sizePrice) {
-      return json(400, { error: "Missing selected size or style" });
+    if (!payload.selectedSize || !sizePrice) {
+      return json(400, { error: "Missing selected size" });
+    }
+
+    if (productType === "paint_by_numbers" && !payload.selectedStyle) {
+      return json(400, { error: "Missing selected style for paint by numbers" });
     }
 
     if (!payload.contact?.firstName || !payload.contact?.lastName || phone.length !== 8) {
@@ -222,11 +234,12 @@ serve(async (req) => {
       _shipping_governorate: payload.shipping.governorate.trim(),
       _shipping_postal_code: payload.shipping.postalCode?.trim() || "",
       _coupon_code: payload.couponCode?.trim() || null,
+      _product_type: productType,
     });
 
     if (error) {
       const code = error.message || "ORDER_CREATE_FAILED";
-      const status = code.startsWith("COUPON_") ? 400 : 500;
+      const status = code.startsWith("COUPON_") || code.startsWith("ORDER_") ? 400 : 500;
       return json(status, { error: code });
     }
 
@@ -255,6 +268,14 @@ serve(async (req) => {
     const dedicationText = sanitizeDedicationText(payload.dedicationText);
     if (dedicationText) {
       orderUpdates.dedication_text = dedicationText;
+    }
+    // Always persist product type fields (defaults to paint_by_numbers)
+    orderUpdates.product_type = productType;
+    if (payload.stencilDetailLevel) {
+      orderUpdates.stencil_detail_level = payload.stencilDetailLevel;
+    }
+    if (payload.glitterPalette) {
+      orderUpdates.glitter_palette = payload.glitterPalette;
     }
 
     if (Object.keys(orderUpdates).length > 0) {
@@ -316,9 +337,10 @@ serve(async (req) => {
           instructionCode,
           status: "confirmed",
           kitSize: payload.selectedSize,
-          artStyle: payload.selectedStyle,
+          artStyle: payload.selectedStyle || null,
           totalPrice: created.total_price,
           category: payload.category,
+          productType,
         });
         emailSent = true;
       } catch (emailError) {

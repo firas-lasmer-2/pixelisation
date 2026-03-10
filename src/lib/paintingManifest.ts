@@ -12,10 +12,11 @@ import {
   type KitSize,
 } from "@/lib/kitCatalog";
 import { resolveLegacyPalette, type StylePalette } from "@/lib/palettes";
-import type { ArtStyle, OrderState } from "@/lib/store";
+import type { ArtStyle, GlitterPalette, OrderState, ProductType, StencilDetailLevel } from "@/lib/store";
 import { getPhoto } from "@/lib/store";
 import { getPaintingStats } from "@/lib/paintingLayout";
 import { getStyleDefinition, normalizeArtStyle } from "@/lib/styles";
+import { type StencilResult, renderStencilPreview } from "@/lib/stencilProcessing";
 
 type LegacyViewerData = {
   indices: number[];
@@ -32,6 +33,10 @@ type RawManifest = Partial<PaintingManifest> & {
   styleProfileKey?: string;
   styleProfileVersion?: number;
   paletteSnapshot?: StylePalette | null;
+  productType?: ProductType;
+  stencilDetailLevel?: StencilDetailLevel | null;
+  stencilBridgeCount?: number | null;
+  glitterPalette?: GlitterPalette | null;
 };
 
 type ManifestBase = Omit<PaintingManifest, "version" | "dedication" | "referenceImageUrl" | "previewDataUrl">;
@@ -42,7 +47,8 @@ type StoredPaintingManifest = Omit<PaintingManifest, "referenceImageUrl" | "prev
 };
 
 export interface PaintingManifest {
-  version: 4;
+  version: 5;
+  productType: ProductType;
   orderRef: string;
   instructionCode: string;
   category: string;
@@ -63,6 +69,10 @@ export interface PaintingManifest {
   gridCols: number;
   gridRows: number;
   indices: number[];
+  /** Stencil-specific fields (null for paint_by_numbers) */
+  stencilDetailLevel: StencilDetailLevel | null;
+  stencilBridgeCount: number | null;
+  glitterPalette: GlitterPalette | null;
   stats: {
     totalCells: number;
     totalSections: number;
@@ -135,7 +145,7 @@ function materializeManifest(base: ManifestBase): PaintingManifest {
 
   return {
     ...base,
-    version: 4,
+    version: 5,
     paletteSnapshot: palette,
     dedicationText: applied.dedication?.text || null,
     dedication: applied.dedication,
@@ -149,6 +159,7 @@ function buildBaseManifest(input: {
   orderRef: string;
   instructionCode: string;
   category: string;
+  productType?: ProductType;
   kitSize: KitSize;
   artStyle: ArtStyle;
   paletteKey: string;
@@ -162,6 +173,9 @@ function buildBaseManifest(input: {
   gridCols: number;
   gridRows: number;
   indices: number[];
+  stencilDetailLevel?: StencilDetailLevel | null;
+  stencilBridgeCount?: number | null;
+  glitterPalette?: GlitterPalette | null;
 }) {
   const kit = getKitConfig(input.kitSize);
   const stats = getPaintingStats(input.gridCols, input.gridRows);
@@ -170,6 +184,7 @@ function buildBaseManifest(input: {
     orderRef: input.orderRef,
     instructionCode: input.instructionCode.toUpperCase(),
     category: input.category,
+    productType: input.productType ?? "paint_by_numbers",
     kitSize: input.kitSize,
     canvasLabel: kit.manifestLabel,
     artStyle: input.artStyle,
@@ -184,6 +199,9 @@ function buildBaseManifest(input: {
     gridCols: input.gridCols,
     gridRows: input.gridRows,
     indices: input.indices,
+    stencilDetailLevel: input.stencilDetailLevel ?? null,
+    stencilBridgeCount: input.stencilBridgeCount ?? null,
+    glitterPalette: input.glitterPalette ?? null,
     stats: {
       ...stats,
       colorCount: input.paletteSnapshot.colors.length,
@@ -202,7 +220,7 @@ function finalizeManifest(base: ManifestBase, raw: RawManifest | null) {
   if (referenceImageUrl) {
     return {
       ...base,
-      version: 4,
+      version: 5,
       dedication: raw?.dedication || null,
       referenceImageUrl,
       previewDataUrl:
@@ -351,6 +369,7 @@ export function normalizePaintingManifest(raw: unknown, instructionCode: string)
     orderRef: candidate.orderRef || "",
     instructionCode: candidate.instructionCode || instructionCode,
     category: candidate.category || "classic",
+    productType: candidate.productType ?? "paint_by_numbers",
     kitSize: inferredKitSize,
     artStyle,
     paletteKey: candidate.paletteKey || orderStyleToPaletteKey(artStyle),
@@ -370,6 +389,9 @@ export function normalizePaintingManifest(raw: unknown, instructionCode: string)
     gridCols: candidate.gridCols,
     gridRows: candidate.gridRows,
     indices: candidate.indices,
+    stencilDetailLevel: candidate.stencilDetailLevel ?? null,
+    stencilBridgeCount: candidate.stencilBridgeCount ?? null,
+    glitterPalette: candidate.glitterPalette ?? null,
   });
 
   return finalizeManifest(base, candidate);
@@ -388,9 +410,21 @@ export function loadPaintingManifestLocally(instructionCode: string) {
   return null;
 }
 
+/** Synthetic 4-level palette used to render stencil previews in the viewer */
+const STENCIL_PALETTE_SNAPSHOT: StylePalette = {
+  name: "Stencil",
+  description: "Stencil reveal palette",
+  colors: [
+    { name: "Background", ref: "background", r: 70,  g: 60,  b: 55,  hex: "#463C37", L: 25,  a: 1,   bLab: 2   },
+    { name: "Portrait",   ref: "portrait",   r: 255, g: 255, b: 255, hex: "#FFFFFF", L: 100, a: 0,   bLab: 0   },
+    { name: "Mid Shadow", ref: "mid_shadow", r: 210, g: 205, b: 200, hex: "#D2CDC8", L: 81,  a: 0.5, bLab: 1.5 },
+    { name: "Deep Shadow",ref: "deep_shadow",r: 160, g: 155, b: 150, hex: "#A09B96", L: 63,  a: 0.5, bLab: 1.5 },
+  ],
+};
+
 export function buildPaintingManifest(input: {
   order: OrderState;
-  result: ProcessingResult;
+  result: ProcessingResult | StencilResult;
   origin?: string;
   dedicationText?: string | null;
 }) {
@@ -404,24 +438,84 @@ export function buildPaintingManifest(input: {
     throw new Error("Kit size is required to build the painting manifest");
   }
 
+  const isStencil = order.productType === "stencil_paint" || order.productType === "glitter_reveal";
+
+  if (isStencil) {
+    const stencilResult = result as StencilResult;
+    const base = buildBaseManifest({
+      orderRef: order.orderRef,
+      instructionCode: order.instructionCode,
+      category: order.category,
+      productType: order.productType,
+      kitSize,
+      artStyle: "original",
+      paletteKey: "stencil",
+      styleProfileKey: "original",
+      styleProfileVersion: 1,
+      paletteSnapshot: STENCIL_PALETTE_SNAPSHOT,
+      createdAt: new Date().toISOString(),
+      dedicationText: input.dedicationText ?? order.dedicationText ?? null,
+      sourceImageUrl: order.aiGeneratedUrl || getPhoto(order) || null,
+      viewerUrl: buildViewerUrl(order.instructionCode, origin || BRAND.siteUrl),
+      gridCols: stencilResult.gridCols,
+      gridRows: stencilResult.gridRows,
+      indices: Array.from(stencilResult.indices),
+      stencilDetailLevel: order.stencilDetailLevel,
+      stencilBridgeCount: stencilResult.bridgeCount,
+      glitterPalette: order.glitterPalette,
+    });
+
+    // Apply dedication overlay so the text is baked into the preview
+    const applied = applyDedicationOverlay({
+      indices: Uint8Array.from(base.indices),
+      gridCols: base.gridCols,
+      gridRows: base.gridRows,
+      palette: STENCIL_PALETTE_SNAPSHOT.colors,
+      kitSize: base.kitSize,
+      dedicationText: base.dedicationText,
+    });
+
+    // Use the stencil-specific renderer (solid cells, real contrast) — NOT renderSmoothPreview
+    const previewCanvas = renderStencilPreview(
+      applied.indices,
+      base.gridCols,
+      base.gridRows,
+      stencilResult.levels,
+    );
+    const previewDataUrl = previewCanvas.toDataURL("image/jpeg", 0.92);
+
+    return {
+      ...base,
+      version: 5 as const,
+      paletteSnapshot: STENCIL_PALETTE_SNAPSHOT,
+      dedicationText: applied.dedication?.text || null,
+      dedication: applied.dedication,
+      referenceImageUrl: previewDataUrl,
+      previewDataUrl,
+      indices: Array.from(applied.indices),
+    } satisfies PaintingManifest;
+  }
+
+  const paintResult = result as ProcessingResult;
   return materializeManifest(
     buildBaseManifest({
       orderRef: order.orderRef,
       instructionCode: order.instructionCode,
       category: order.category,
+      productType: "paint_by_numbers",
       kitSize,
-      artStyle: normalizeArtStyle(order.selectedStyle || result.styleKey),
-      paletteKey: orderStyleToPaletteKey(result.styleKey),
-      styleProfileKey: result.styleProfileKey,
-      styleProfileVersion: result.styleProfileVersion,
-      paletteSnapshot: result.palette,
+      artStyle: normalizeArtStyle(order.selectedStyle || paintResult.styleKey),
+      paletteKey: orderStyleToPaletteKey(paintResult.styleKey),
+      styleProfileKey: paintResult.styleProfileKey,
+      styleProfileVersion: paintResult.styleProfileVersion,
+      paletteSnapshot: paintResult.palette,
       createdAt: new Date().toISOString(),
       dedicationText: input.dedicationText ?? order.dedicationText ?? null,
       sourceImageUrl: order.aiGeneratedUrl || getPhoto(order) || null,
       viewerUrl: buildViewerUrl(order.instructionCode, origin || BRAND.siteUrl),
-      gridCols: result.gridCols,
-      gridRows: result.gridRows,
-      indices: Array.from(result.indices),
+      gridCols: paintResult.gridCols,
+      gridRows: paintResult.gridRows,
+      indices: Array.from(paintResult.indices),
     }),
   );
 }

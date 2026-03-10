@@ -413,6 +413,99 @@ export const fr = {
     tnd: "TND",
     currency: "DT",
   },
+
+  productTypes: {
+    paint_by_numbers: {
+      label: "Peinture par numéros",
+      description: "Chaque zone numérotée correspond à une couleur. Peignez case par case pour révéler votre portrait.",
+      shortDescription: "Kit complet avec peintures",
+      badge: null,
+    },
+    stencil_paint: {
+      label: "Pochoir Révélation",
+      description: "Peignez librement sur le canevas, puis décollez le pochoir pour révéler un portrait blanc saisissant.",
+      shortDescription: "Peinture libre + révélation",
+      badge: "Nouveau",
+    },
+    glitter_reveal: {
+      label: "Paillettes Révélation",
+      description: "Parsemez de paillettes colorées, décollez le pochoir et révélez un portrait scintillant unique.",
+      shortDescription: "Paillettes + révélation",
+      badge: "Nouveau",
+    },
+  },
+
+  stencilDetail: {
+    bold: {
+      label: "Audacieux",
+      description: "Formes larges, contraste fort — idéal pour débutants et enfants.",
+    },
+    medium: {
+      label: "Équilibré",
+      description: "Bon équilibre entre détail et facilité de découpe.",
+    },
+    fine: {
+      label: "Fin",
+      description: "Détails subtils, mèches et expressions fines — pour les artistes confirmés.",
+    },
+    sectionTitle: "Choisissez le niveau de détail",
+    sectionSubtitle: "Le niveau de détail définit la finesse du pochoir de votre portrait.",
+  },
+
+  glitterPalettes: {
+    mercury: {
+      name: "Mercure",
+      description: "Argent et blanc lumineux — élégance pure",
+    },
+    mars: {
+      name: "Mars",
+      description: "Rouge et or chaud — passion et chaleur",
+    },
+    neptune: {
+      name: "Neptune",
+      description: "Bleu et turquoise profond — fraîcheur marine",
+    },
+    jupiter: {
+      name: "Jupiter",
+      description: "Violet et bronze cosmique — mystère et profondeur",
+    },
+    sectionTitle: "Choisissez votre palette de paillettes",
+    sectionSubtitle: "Les paillettes de votre kit correspondent à la palette choisie.",
+  },
+
+  productShowcase: {
+    sectionTitle: "Choisissez votre expérience",
+    sectionSubtitle: "Trois façons uniques de créer votre portrait personnalisé",
+    discoverCta: "Découvrir",
+  },
+
+  stencilGuide: {
+    coverTitle: "Guide de création",
+    coverSubtitle: "Votre pochoir personnalisé",
+    stepsTitle: "Comment créer votre œuvre",
+    steps: [
+      "Déballez votre kit et disposez tout le matériel sur une surface protégée.",
+      "Fixez le canevas sur un support stable ou posez-le à plat.",
+      "Appliquez la peinture (ou les paillettes) librement sur toute la surface du canevas.",
+      "Assurez-vous de bien couvrir toutes les zones, même les bords.",
+      "Laissez sécher complètement — comptez au moins 2 heures.",
+      "Décollez délicatement le pochoir en tirant depuis un coin.",
+      "Admirez votre portrait révélé ! Accrochez-le et partagez votre création.",
+    ],
+    resultTitle: "Le résultat attendu",
+    resultBefore: "Avant",
+    resultAfter: "Après",
+    tipsTitle: "Conseils & astuces",
+    tips: [
+      "Utilisez une peinture acrylique de bonne qualité pour un meilleur résultat.",
+      "Ne saturez pas le canevas — une couche fine et uniforme suffit.",
+      "Pour les paillettes, utilisez un fixatif en spray après le séchage.",
+      "Décollez le pochoir lentement pour éviter d'arracher la peinture.",
+      "Encadrez votre portrait pour le protéger et le sublimer.",
+    ],
+    glitterTitle: "Votre palette de paillettes",
+    glitterColorsLabel: "Couleurs incluses dans votre kit",
+  },
 };
 
 export type Translations = typeof fr;

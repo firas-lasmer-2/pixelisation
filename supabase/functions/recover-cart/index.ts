@@ -42,8 +42,11 @@ serve(async (req) => {
       recoveredOrderRef: cart.recovered_order_ref,
       cart: {
         category: cart.category,
+        productType: (cart as Record<string, unknown>).product_type || "paint_by_numbers",
         selectedSize: cart.kit_size,
         selectedStyle: cart.art_style,
+        stencilDetailLevel: (cart as Record<string, unknown>).stencil_detail_level || null,
+        glitterPalette: (cart as Record<string, unknown>).glitter_palette || null,
         dedicationText: cart.dedication_text,
         dreamJob: cart.dream_job,
         stepReached: cart.step_reached,

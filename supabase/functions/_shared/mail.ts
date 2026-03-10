@@ -38,6 +38,12 @@ const CATEGORY_LABELS: Record<string, string> = {
   pet: "Portrait Royal",
 };
 
+const PRODUCT_TYPE_LABELS: Record<string, string> = {
+  paint_by_numbers: "Peinture par numéros",
+  stencil_paint: "Pochoir Révélation",
+  glitter_reveal: "Paillettes Révélation",
+};
+
 const TIMELINE_STEPS = ["confirmed", "processing", "shipped", "delivered"];
 
 function buildTimeline(currentStatus: string): string {
@@ -84,6 +90,7 @@ export async function sendStatusEmail(payload: {
   artStyle?: string | null;
   totalPrice?: number | null;
   category?: string | null;
+  productType?: string | null;
   trackingUrl?: string | null;
   trackingNumber?: string | null;
   courierName?: string | null;
@@ -100,6 +107,7 @@ export async function sendStatusEmail(payload: {
   }
 
   const resolvedCategoryLabel = categoryLabel(payload.category);
+  const resolvedProductTypeLabel = payload.productType ? (PRODUCT_TYPE_LABELS[payload.productType] || payload.productType) : null;
   const trackUrl = payload.trackingUrl || buildTrackUrl(payload.orderRef, payload.instructionCode);
 
   const htmlBody = `
@@ -148,6 +156,7 @@ export async function sendStatusEmail(payload: {
                 <td style="padding:6px 0;color:#999;">Catégorie</td>
                 <td style="padding:6px 0;text-align:right;font-weight:600;color:#2B2B2B;">${resolvedCategoryLabel}</td>
               </tr>
+              ${resolvedProductTypeLabel ? `<tr><td style="padding:6px 0;color:#999;">Type de kit</td><td style="padding:6px 0;text-align:right;font-weight:600;color:#2B2B2B;">${resolvedProductTypeLabel}</td></tr>` : ""}
               ${payload.kitSize ? `<tr><td style="padding:6px 0;color:#999;">Taille</td><td style="padding:6px 0;text-align:right;color:#2B2B2B;">${sizeLabel(payload.kitSize)}</td></tr>` : ""}
               ${payload.artStyle ? `<tr><td style="padding:6px 0;color:#999;">Style</td><td style="padding:6px 0;text-align:right;color:#2B2B2B;">${payload.artStyle}</td></tr>` : ""}
               ${payload.courierName ? `<tr><td style="padding:6px 0;color:#999;">Transporteur</td><td style="padding:6px 0;text-align:right;color:#2B2B2B;">${payload.courierName}</td></tr>` : ""}

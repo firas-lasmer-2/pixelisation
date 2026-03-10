@@ -8,13 +8,48 @@ import { isCreateOrderPayloadTooLarge, optimizeOrderImageSource } from "@/lib/or
 export type OrderCategory = "classic" | "family" | "kids_dream" | "pet";
 export type KitSize = CatalogKitSize;
 export type ArtStyle = "original" | "vintage" | "pop_art" | "watercolor" | "poster";
-export type AddOnId = "extra_paint" | "gift_wrap" | "frame";
+export type ProductType = "paint_by_numbers" | "stencil_paint" | "glitter_reveal";
+export type StencilDetailLevel = "bold" | "medium" | "fine";
+export type GlitterPalette = "mercury" | "mars" | "neptune" | "jupiter";
+export type AddOnId = "extra_paint" | "gift_wrap" | "frame" | "extra_glitter";
 
 export const ADD_ONS = [
-  { id: "extra_paint" as AddOnId, label: "Jeu de peintures supplémentaire", description: "Un jeu de rechange pour ne jamais manquer de couleurs.", price: 49, icon: "🎨" },
-  { id: "gift_wrap" as AddOnId, label: "Emballage cadeau premium", description: "Boîte élégante avec ruban et carte personnalisée.", price: 29, icon: "🎁" },
-  { id: "frame" as AddOnId, label: "Cadre en bois", description: "Cadre en bois naturel pour exposer votre chef-d'œuvre.", price: 79, icon: "🖼️" },
+  { id: "extra_paint" as AddOnId, label: "Jeu de peintures supplémentaire", description: "Un jeu de rechange pour ne jamais manquer de couleurs.", price: 49, icon: "🎨", productTypes: ["paint_by_numbers"] as ProductType[] },
+  { id: "extra_glitter" as AddOnId, label: "Kit de paillettes supplémentaire", description: "Un kit de paillettes supplémentaire pour plus de brillance.", price: 49, icon: "✨", productTypes: ["glitter_reveal"] as ProductType[] },
+  { id: "gift_wrap" as AddOnId, label: "Emballage cadeau premium", description: "Boîte élégante avec ruban et carte personnalisée.", price: 29, icon: "🎁", productTypes: ["paint_by_numbers", "stencil_paint", "glitter_reveal"] as ProductType[] },
+  { id: "frame" as AddOnId, label: "Cadre en bois", description: "Cadre en bois naturel pour exposer votre chef-d'œuvre.", price: 79, icon: "🖼️", productTypes: ["paint_by_numbers", "stencil_paint", "glitter_reveal"] as ProductType[] },
 ] as const;
+
+export function getAvailableAddOns(productType: ProductType) {
+  return ADD_ONS.filter((a) => (a.productTypes as readonly string[]).includes(productType));
+}
+
+export const PRODUCT_TYPE_META: Record<ProductType, { label: string; description: string; shortDescription: string; icon: string }> = {
+  paint_by_numbers: {
+    label: "Peinture par Numéros",
+    description: "Kit classique avec toile numérotée et peintures acryliques",
+    shortDescription: "Le classique Helma",
+    icon: "🎨",
+  },
+  stencil_paint: {
+    label: "Stencil Paint Reveal",
+    description: "Peignez librement sur le pochoir, pelez pour révéler votre portrait en blanc",
+    shortDescription: "Peignez, pelez, révélez !",
+    icon: "🖌️",
+  },
+  glitter_reveal: {
+    label: "Glitter Reveal",
+    description: "Saupoudrez de paillettes, pelez le pochoir, révélez votre portrait scintillant",
+    shortDescription: "Paillettes, pochoir, magie !",
+    icon: "✨",
+  },
+};
+
+export const STENCIL_DETAIL_META: Record<StencilDetailLevel, { label: string; description: string }> = {
+  bold: { label: "Audacieux", description: "Silhouette simple et frappante — idéal pour débuter" },
+  medium: { label: "Équilibré", description: "Bon mélange de forme et de détail facial" },
+  fine: { label: "Détaillé", description: "Contours précis avec cheveux et traits du visage" },
+};
 
 export interface ContactInfo {
   firstName: string;
@@ -32,12 +67,15 @@ export interface ShippingInfo {
 
 export interface OrderState {
   category: OrderCategory;
+  productType: ProductType;
   photos: string[];
   croppedArea: Area | null;
   selectedStyle: ArtStyle | null;
   stylePreviewUrl: string;
   selectedSize: KitSize | null;
   addOns: AddOnId[];
+  stencilDetailLevel: StencilDetailLevel | null;
+  glitterPalette: GlitterPalette | null;
   contact: ContactInfo;
   shipping: ShippingInfo;
   orderRef: string;
@@ -59,12 +97,15 @@ const defaultShipping: ShippingInfo = { address: "", city: "", governorate: "", 
 
 const initialState: OrderState = {
   category: "classic",
+  productType: "paint_by_numbers",
   photos: [],
   croppedArea: null,
   selectedStyle: null,
   stylePreviewUrl: "",
   selectedSize: null,
   addOns: [],
+  stencilDetailLevel: null,
+  glitterPalette: null,
   contact: { ...defaultContact },
   shipping: { ...defaultShipping },
   orderRef: "",
@@ -80,12 +121,16 @@ const initialState: OrderState = {
 interface OrderContextType {
   order: OrderState;
   setCategory: (category: OrderCategory) => void;
+  setProductType: (productType: ProductType) => void;
   setPhoto: (photo: string, index?: number) => void;
   removePhoto: (index: number) => void;
   setCroppedArea: (area: Area) => void;
   setStyle: (style: ArtStyle, previewUrl: string) => void;
+  setStylePreviewUrl: (previewUrl: string) => void;
   setSize: (size: KitSize) => void;
   setAddOns: (addOns: AddOnId[]) => void;
+  setStencilDetailLevel: (level: StencilDetailLevel) => void;
+  setGlitterPalette: (palette: GlitterPalette) => void;
   setContact: (contact: ContactInfo) => void;
   setShipping: (shipping: ShippingInfo) => void;
   setGift: (isGift: boolean, message: string) => void;
@@ -128,6 +173,15 @@ export function OrderProvider({ children }: { children: ReactNode }) {
     aiGeneratedUrl: "",
     aiGenerationRunId: "",
   })), []);
+  const setProductType = useCallback((productType: ProductType) => setOrder((o) => ({
+    ...o,
+    productType,
+    selectedStyle: null,
+    stylePreviewUrl: "",
+    stencilDetailLevel: null,
+    glitterPalette: null,
+    addOns: o.addOns.filter((id) => getAvailableAddOns(productType).some((a) => a.id === id)),
+  })), []);
   const setPhoto = useCallback((photo: string, index = 0) => setOrder((o) => {
     const photos = [...o.photos];
     photos[index] = photo;
@@ -139,6 +193,7 @@ export function OrderProvider({ children }: { children: ReactNode }) {
   }), []);
   const setCroppedArea = useCallback((croppedArea: Area) => setOrder((o) => ({ ...o, croppedArea })), []);
   const setStyle = useCallback((selectedStyle: ArtStyle, stylePreviewUrl: string) => setOrder((o) => ({ ...o, selectedStyle, stylePreviewUrl })), []);
+  const setStylePreviewUrl = useCallback((stylePreviewUrl: string) => setOrder((o) => ({ ...o, stylePreviewUrl })), []);
   const setSize = useCallback((selectedSize: KitSize) => setOrder((o) => ({ ...o, selectedSize })), []);
   const setAddOns = useCallback((addOns: AddOnId[]) => setOrder((o) => ({ ...o, addOns })), []);
   const setContact = useCallback((contact: ContactInfo) => setOrder((o) => ({ ...o, contact })), []);
@@ -147,6 +202,8 @@ export function OrderProvider({ children }: { children: ReactNode }) {
   const setDedicationText = useCallback((dedicationText: string) => setOrder((o) => ({ ...o, dedicationText })), []);
   const setDreamJob = useCallback((dreamJob: string) => setOrder((o) => ({ ...o, dreamJob })), []);
   const setAiGeneratedUrl = useCallback((aiGeneratedUrl: string, aiGenerationRunId = "") => setOrder((o) => ({ ...o, aiGeneratedUrl, aiGenerationRunId })), []);
+  const setStencilDetailLevel = useCallback((stencilDetailLevel: StencilDetailLevel) => setOrder((o) => ({ ...o, stencilDetailLevel })), []);
+  const setGlitterPalette = useCallback((glitterPalette: GlitterPalette) => setOrder((o) => ({ ...o, glitterPalette })), []);
 
   const confirmOrder = useCallback(async (input: {
     contact: ContactInfo;
@@ -167,8 +224,11 @@ export function OrderProvider({ children }: { children: ReactNode }) {
       dedicationText: input.dedicationText ?? latest.dedicationText,
     };
 
-    if (!snapshot.selectedSize || !snapshot.selectedStyle) {
-      throw new Error("Order is missing size or style");
+    if (!snapshot.selectedSize) {
+      throw new Error("Order is missing size");
+    }
+    if (snapshot.productType === "paint_by_numbers" && !snapshot.selectedStyle) {
+      throw new Error("Order is missing style");
     }
 
     const photos = (await Promise.all(
@@ -182,11 +242,14 @@ export function OrderProvider({ children }: { children: ReactNode }) {
 
     const requestBody = {
       category: snapshot.category,
+      productType: snapshot.productType,
       photos,
       aiGeneratedUrl: aiGeneratedUrl || undefined,
       generationRunId: snapshot.aiGenerationRunId || undefined,
       selectedStyle: snapshot.selectedStyle,
       selectedSize: snapshot.selectedSize,
+      stencilDetailLevel: snapshot.stencilDetailLevel || null,
+      glitterPalette: snapshot.glitterPalette || null,
       contact: snapshot.contact,
       shipping: snapshot.shipping,
       isGift: snapshot.isGift,
@@ -243,7 +306,7 @@ export function OrderProvider({ children }: { children: ReactNode }) {
 
   return React.createElement(
     OrderContext.Provider,
-    { value: { order, setCategory, setPhoto, removePhoto, setCroppedArea, setStyle, setSize, setAddOns, setContact, setShipping, setGift, setDedicationText, setDreamJob, setAiGeneratedUrl, confirmOrder, resetOrder } },
+    { value: { order, setCategory, setProductType, setPhoto, removePhoto, setCroppedArea, setStyle, setStylePreviewUrl, setSize, setAddOns, setStencilDetailLevel, setGlitterPalette, setContact, setShipping, setGift, setDedicationText, setDreamJob, setAiGeneratedUrl, confirmOrder, resetOrder } },
     children,
   );
 }

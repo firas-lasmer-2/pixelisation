@@ -45,7 +45,7 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, serviceRoleKey);
     const { data: order, error: orderError } = await supabase
       .from("orders")
-      .select("id, order_ref, instruction_code, photo_url")
+      .select("id, order_ref, instruction_code, photo_url, product_type")
       .eq("order_ref", String(orderRef).toUpperCase())
       .eq("instruction_code", String(instructionCode).toUpperCase())
       .maybeSingle();
@@ -62,7 +62,8 @@ serve(async (req) => {
 
     const resolvedManifest = {
       ...manifest,
-      version: 4,
+      version: 5,
+      productType: manifest?.productType || order.product_type || "paint_by_numbers",
       orderRef: order.order_ref,
       instructionCode: order.instruction_code,
       dedicationText: resolvedDedicationText,

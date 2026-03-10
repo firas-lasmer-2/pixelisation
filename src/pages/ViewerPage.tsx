@@ -16,7 +16,8 @@ import {
   type PaintingManifest,
 } from "@/lib/paintingManifest";
 import { buildTrackUrl } from "@/lib/brand";
-import { Home, AlertCircle, Loader2, ExternalLink, Layers, Palette, Clock4, Heart, Truck } from "lucide-react";
+import { Home, AlertCircle, Loader2, ExternalLink, Layers, Palette, Clock4, Heart, Truck, Paintbrush, Sparkles } from "lucide-react";
+import { PRODUCT_TYPE_META } from "@/lib/store";
 
 const ViewerPage = () => {
   const { code } = useParams<{ code: string }>();
@@ -132,9 +133,17 @@ const ViewerPage = () => {
                         <Badge variant="outline">{manifest.stats.colorCount} colors</Badge>
                         <Badge variant="outline">{manifest.stats.totalSections} sections</Badge>
                       </div>
-                      <h1 className="mt-4 text-2xl md:text-3xl font-bold">Helma Painting Workspace</h1>
+                      <h1 className="mt-4 text-2xl md:text-3xl font-bold">
+                        {manifest.productType && manifest.productType !== "paint_by_numbers"
+                          ? `Helma — ${PRODUCT_TYPE_META[manifest.productType].label}`
+                          : "Helma Painting Workspace"}
+                      </h1>
                       <p className="mt-2 text-sm text-muted-foreground max-w-2xl">
-                        This viewer follows the exact same painting manifest as your PDF guide, so the color letters, section numbering, and progress all stay aligned.
+                        {manifest.productType === "stencil_paint"
+                          ? "Voici l'aperçu de votre pochoir personnalisé. Le résultat final apparaîtra après avoir peint et décollé le pochoir."
+                          : manifest.productType === "glitter_reveal"
+                          ? "Voici l'aperçu de votre pochoir pour paillettes. Parsemez de paillettes, décollez et découvrez votre portrait scintillant !"
+                          : "This viewer follows the exact same painting manifest as your PDF guide, so the color letters, section numbering, and progress all stay aligned."}
                       </p>
 
                       <div className="mt-5 grid gap-3 md:grid-cols-4">
