@@ -75,6 +75,7 @@ export interface OrderState {
   selectedSize: KitSize | null;
   addOns: AddOnId[];
   stencilDetailLevel: StencilDetailLevel | null;
+  customStencilDataUrl: string;
   glitterPalette: GlitterPalette | null;
   contact: ContactInfo;
   shipping: ShippingInfo;
@@ -82,7 +83,7 @@ export interface OrderState {
   instructionCode: string;
   isGift: boolean;
   giftMessage: string;
-  dedicationText: string;
+  dedicationText: string; // Deprecated – always empty, kept for backward compat
   dreamJob: string;
   aiGeneratedUrl: string;
   aiGenerationRunId: string;
@@ -105,6 +106,7 @@ const initialState: OrderState = {
   selectedSize: null,
   addOns: [],
   stencilDetailLevel: null,
+  customStencilDataUrl: "",
   glitterPalette: null,
   contact: { ...defaultContact },
   shipping: { ...defaultShipping },
@@ -130,11 +132,11 @@ interface OrderContextType {
   setSize: (size: KitSize) => void;
   setAddOns: (addOns: AddOnId[]) => void;
   setStencilDetailLevel: (level: StencilDetailLevel) => void;
+  setCustomStencilDataUrl: (url: string) => void;
   setGlitterPalette: (palette: GlitterPalette) => void;
   setContact: (contact: ContactInfo) => void;
   setShipping: (shipping: ShippingInfo) => void;
   setGift: (isGift: boolean, message: string) => void;
-  setDedicationText: (dedicationText: string) => void;
   setDreamJob: (job: string) => void;
   setAiGeneratedUrl: (url: string, generationRunId?: string) => void;
   confirmOrder: (input: {
@@ -142,7 +144,6 @@ interface OrderContextType {
     shipping: ShippingInfo;
     isGift: boolean;
     giftMessage: string;
-    dedicationText?: string | null;
     couponCode?: string | null;
     sessionId?: string | null;
   }) => Promise<{
@@ -179,6 +180,7 @@ export function OrderProvider({ children }: { children: ReactNode }) {
     selectedStyle: null,
     stylePreviewUrl: "",
     stencilDetailLevel: null,
+    customStencilDataUrl: "",
     glitterPalette: null,
     addOns: o.addOns.filter((id) => getAvailableAddOns(productType).some((a) => a.id === id)),
   })), []);
@@ -199,10 +201,10 @@ export function OrderProvider({ children }: { children: ReactNode }) {
   const setContact = useCallback((contact: ContactInfo) => setOrder((o) => ({ ...o, contact })), []);
   const setShipping = useCallback((shipping: ShippingInfo) => setOrder((o) => ({ ...o, shipping })), []);
   const setGift = useCallback((isGift: boolean, giftMessage: string) => setOrder((o) => ({ ...o, isGift, giftMessage })), []);
-  const setDedicationText = useCallback((dedicationText: string) => setOrder((o) => ({ ...o, dedicationText })), []);
   const setDreamJob = useCallback((dreamJob: string) => setOrder((o) => ({ ...o, dreamJob })), []);
   const setAiGeneratedUrl = useCallback((aiGeneratedUrl: string, aiGenerationRunId = "") => setOrder((o) => ({ ...o, aiGeneratedUrl, aiGenerationRunId })), []);
   const setStencilDetailLevel = useCallback((stencilDetailLevel: StencilDetailLevel) => setOrder((o) => ({ ...o, stencilDetailLevel })), []);
+  const setCustomStencilDataUrl = useCallback((customStencilDataUrl: string) => setOrder((o) => ({ ...o, customStencilDataUrl })), []);
   const setGlitterPalette = useCallback((glitterPalette: GlitterPalette) => setOrder((o) => ({ ...o, glitterPalette })), []);
 
   const confirmOrder = useCallback(async (input: {
@@ -210,7 +212,6 @@ export function OrderProvider({ children }: { children: ReactNode }) {
     shipping: ShippingInfo;
     isGift: boolean;
     giftMessage: string;
-    dedicationText?: string | null;
     couponCode?: string | null;
     sessionId?: string | null;
   }) => {
@@ -221,7 +222,6 @@ export function OrderProvider({ children }: { children: ReactNode }) {
       shipping: input.shipping,
       isGift: input.isGift,
       giftMessage: input.giftMessage,
-      dedicationText: input.dedicationText ?? latest.dedicationText,
     };
 
     if (!snapshot.selectedSize) {
@@ -254,7 +254,6 @@ export function OrderProvider({ children }: { children: ReactNode }) {
       shipping: snapshot.shipping,
       isGift: snapshot.isGift,
       giftMessage: snapshot.giftMessage,
-      dedicationText: snapshot.dedicationText || null,
       dreamJob: snapshot.dreamJob || undefined,
       couponCode: input.couponCode || null,
       sessionId: input.sessionId || null,
@@ -294,7 +293,6 @@ export function OrderProvider({ children }: { children: ReactNode }) {
       shipping: input.shipping,
       isGift: input.isGift,
       giftMessage: input.giftMessage,
-      dedicationText: input.dedicationText ?? current.dedicationText,
       orderRef: result.orderRef,
       instructionCode: result.instructionCode,
     }));
@@ -306,7 +304,7 @@ export function OrderProvider({ children }: { children: ReactNode }) {
 
   return React.createElement(
     OrderContext.Provider,
-    { value: { order, setCategory, setProductType, setPhoto, removePhoto, setCroppedArea, setStyle, setStylePreviewUrl, setSize, setAddOns, setStencilDetailLevel, setGlitterPalette, setContact, setShipping, setGift, setDedicationText, setDreamJob, setAiGeneratedUrl, confirmOrder, resetOrder } },
+    { value: { order, setCategory, setProductType, setPhoto, removePhoto, setCroppedArea, setStyle, setStylePreviewUrl, setSize, setAddOns, setStencilDetailLevel, setCustomStencilDataUrl, setGlitterPalette, setContact, setShipping, setGift, setDreamJob, setAiGeneratedUrl, confirmOrder, resetOrder } },
     children,
   );
 }

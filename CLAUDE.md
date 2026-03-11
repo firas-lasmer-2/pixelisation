@@ -5,11 +5,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-npm run dev          # Start Vite dev server
+npm run dev          # Start Vite dev server (port 8080)
 npm run build        # Production build
+npm run build:dev    # Dev-mode build
+npm run preview      # Preview production build
 npm run lint         # ESLint
 npm run test         # Run tests once (vitest)
 npm run test:watch   # Run tests in watch mode
+npx vitest run src/lib/palettes.test.ts  # Run a single test file
 ```
 
 Supabase edge functions are deployed via the Supabase CLI (`supabase functions deploy <name>`). Local dev of edge functions requires `supabase start`.
@@ -85,8 +88,19 @@ Shared code in `supabase/functions/_shared/`: `cors.ts`, `mail.ts`, `brand.ts`.
 
 ## Important Conventions
 
+- **Path alias**: `@/` maps to `src/` (configured in vite, vitest, and tsconfig). Always use `@/` imports.
+- **TypeScript strictness**: `strictNullChecks` and `noImplicitAny` are **off**. Don't add explicit null guards where the project style doesn't use them.
 - **KitSize in `imageProcessing.ts` vs `store.ts`**: `imageProcessing.ts` uses `"40x50" | "30x40" | "A4"` (short form), while `store.ts` uses `"stamp_kit_40x50"` etc. The Studio maps between them when calling `processImage()`.
 - **Dedication text**: Max 22 chars, no emoji, sanitized via `sanitizeDedicationText()`. Applied by `applyDedicationOverlay()` which modifies the `indices` array and returns a `PaintingDedication` metadata object.
 - **Manifest versioning**: `normalizePaintingManifest()` handles both legacy viewer data format and v3 manifests. Always use it when reading raw manifest JSON.
 - **Pricing** (DT): 40×50 → 449, 30×40 → 349, A4 → 249. Bundle price 749 DT. Defined in both `store.ts` (frontend display) and `create-order/index.ts` (server-side validation).
 - **Phone validation**: Tunisia — must be exactly 8 digits after stripping non-digits.
+
+## Environment Variables
+
+Frontend (prefixed with `VITE_`):
+- `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`
+
+Edge functions:
+- `SUPABASE_SERVICE_ROLE_KEY`, `OPENAI_API_KEY`, `OPENAI_IMAGE_MODEL` (optional)
+- `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `HELMA_SITE_URL`, `HELMA_SUPPORT_EMAIL`

@@ -1,7 +1,5 @@
 import { BRAND, STORAGE_KEYS, buildViewerUrl } from "@/lib/brand";
 import {
-  applyDedicationOverlay,
-  sanitizeDedicationText,
   type PaintingDedication,
 } from "@/lib/dedicationOverlay";
 import { renderSmoothPreview, type ProcessingResult } from "@/lib/imageProcessing";
@@ -16,7 +14,7 @@ import type { ArtStyle, GlitterPalette, OrderState, ProductType, StencilDetailLe
 import { getPhoto } from "@/lib/store";
 import { getPaintingStats } from "@/lib/paintingLayout";
 import { getStyleDefinition, normalizeArtStyle } from "@/lib/styles";
-import { type StencilResult, renderStencilPreview } from "@/lib/stencilProcessing";
+import { type StencilResult, renderStencilPreview, getStencilLevels } from "@/lib/stencilProcessing";
 
 type LegacyViewerData = {
   indices: number[];
@@ -118,6 +116,10 @@ export function orderStyleToPaletteKey(style: ArtStyle | string) {
   return normalizeArtStyle(style);
 }
 
+export function isStencilProduct(productType: ProductType | string | null | undefined): boolean {
+  return productType === "stencil_paint" || productType === "glitter_reveal";
+}
+
 export function resolveManifestPalette(
   manifest: Pick<PaintingManifest, "paletteSnapshot" | "artStyle">,
 ): StylePalette {
@@ -126,32 +128,37 @@ export function resolveManifestPalette(
 
 function materializeManifest(base: ManifestBase): PaintingManifest {
   const palette = resolveManifestPalette(base);
-  const applied = applyDedicationOverlay({
-    indices: Uint8Array.from(base.indices),
-    gridCols: base.gridCols,
-    gridRows: base.gridRows,
-    palette: palette.colors,
-    kitSize: base.kitSize,
-    dedicationText: base.dedicationText,
-  });
-  const referenceCanvas = renderSmoothPreview(
-    applied.indices,
-    palette.colors,
-    base.gridCols,
-    base.gridRows,
-    6,
-  );
-  const referenceImageUrl = referenceCanvas.toDataURL("image/jpeg", 0.9);
+
+  let referenceImageUrl: string;
+  if (isStencilProduct(base.productType)) {
+    const levels = getStencilLevels(base.stencilDetailLevel);
+    const stencilCanvas = renderStencilPreview(
+      Uint8Array.from(base.indices),
+      base.gridCols,
+      base.gridRows,
+      levels,
+    );
+    referenceImageUrl = stencilCanvas.toDataURL("image/jpeg", 0.92);
+  } else {
+    const referenceCanvas = renderSmoothPreview(
+      Uint8Array.from(base.indices),
+      palette.colors,
+      base.gridCols,
+      base.gridRows,
+      6,
+    );
+    referenceImageUrl = referenceCanvas.toDataURL("image/jpeg", 0.9);
+  }
 
   return {
     ...base,
     version: 5,
     paletteSnapshot: palette,
-    dedicationText: applied.dedication?.text || null,
-    dedication: applied.dedication,
+    dedicationText: null,
+    dedication: null,
     referenceImageUrl,
     previewDataUrl: referenceImageUrl,
-    indices: Array.from(applied.indices),
+    indices: base.indices,
   };
 }
 
@@ -167,7 +174,6 @@ function buildBaseManifest(input: {
   styleProfileVersion: number;
   paletteSnapshot: StylePalette;
   createdAt: string;
-  dedicationText: string | null;
   sourceImageUrl: string | null;
   viewerUrl: string;
   gridCols: number;
@@ -193,7 +199,7 @@ function buildBaseManifest(input: {
     styleProfileVersion: input.styleProfileVersion,
     paletteSnapshot: input.paletteSnapshot,
     createdAt: input.createdAt,
-    dedicationText: sanitizeDedicationText(input.dedicationText) || null,
+    dedicationText: null,
     sourceImageUrl: input.sourceImageUrl,
     viewerUrl: input.viewerUrl,
     gridCols: input.gridCols,
@@ -344,7 +350,6 @@ export function normalizePaintingManifest(raw: unknown, instructionCode: string)
         styleProfileVersion: 0,
         paletteSnapshot,
         createdAt: legacy.createdAt || new Date().toISOString(),
-        dedicationText: null,
         sourceImageUrl: null,
         viewerUrl: buildViewerUrl(instructionCode),
         gridCols: legacy.gridCols,
@@ -377,7 +382,6 @@ export function normalizePaintingManifest(raw: unknown, instructionCode: string)
     styleProfileVersion: resolveStyleProfileVersion(styleProfileKey, candidate.styleProfileVersion),
     paletteSnapshot,
     createdAt: candidate.createdAt || new Date().toISOString(),
-    dedicationText: candidate.dedication?.text || candidate.dedicationText || null,
     sourceImageUrl:
       typeof candidate.sourceImageUrl === "string" && candidate.sourceImageUrl.length > 0
         ? candidate.sourceImageUrl
@@ -415,10 +419,10 @@ const STENCIL_PALETTE_SNAPSHOT: StylePalette = {
   name: "Stencil",
   description: "Stencil reveal palette",
   colors: [
-    { name: "Background", ref: "background", r: 70,  g: 60,  b: 55,  hex: "#463C37", L: 25,  a: 1,   bLab: 2   },
-    { name: "Portrait",   ref: "portrait",   r: 255, g: 255, b: 255, hex: "#FFFFFF", L: 100, a: 0,   bLab: 0   },
-    { name: "Mid Shadow", ref: "mid_shadow", r: 210, g: 205, b: 200, hex: "#D2CDC8", L: 81,  a: 0.5, bLab: 1.5 },
-    { name: "Deep Shadow",ref: "deep_shadow",r: 160, g: 155, b: 150, hex: "#A09B96", L: 63,  a: 0.5, bLab: 1.5 },
+    { name: "Background",   ref: "background",   r: 40,  g: 35,  b: 32,  hex: "#282320", L: 14,  a: 1,   bLab: 2   },
+    { name: "Deep Contour", ref: "deep_contour",  r: 165, g: 162, b: 158, hex: "#A5A29E", L: 66,  a: 0.3, bLab: 1   },
+    { name: "Light Contour",ref: "light_contour", r: 210, g: 208, b: 206, hex: "#D2D0CE", L: 83,  a: 0.2, bLab: 0.5 },
+    { name: "Portrait",     ref: "portrait",      r: 255, g: 255, b: 255, hex: "#FFFFFF", L: 100, a: 0,   bLab: 0   },
   ],
 };
 
@@ -426,7 +430,6 @@ export function buildPaintingManifest(input: {
   order: OrderState;
   result: ProcessingResult | StencilResult;
   origin?: string;
-  dedicationText?: string | null;
 }) {
   const { order, result, origin } = input;
   if (!order.instructionCode) {
@@ -454,7 +457,6 @@ export function buildPaintingManifest(input: {
       styleProfileVersion: 1,
       paletteSnapshot: STENCIL_PALETTE_SNAPSHOT,
       createdAt: new Date().toISOString(),
-      dedicationText: input.dedicationText ?? order.dedicationText ?? null,
       sourceImageUrl: order.aiGeneratedUrl || getPhoto(order) || null,
       viewerUrl: buildViewerUrl(order.instructionCode, origin || BRAND.siteUrl),
       gridCols: stencilResult.gridCols,
@@ -465,19 +467,9 @@ export function buildPaintingManifest(input: {
       glitterPalette: order.glitterPalette,
     });
 
-    // Apply dedication overlay so the text is baked into the preview
-    const applied = applyDedicationOverlay({
-      indices: Uint8Array.from(base.indices),
-      gridCols: base.gridCols,
-      gridRows: base.gridRows,
-      palette: STENCIL_PALETTE_SNAPSHOT.colors,
-      kitSize: base.kitSize,
-      dedicationText: base.dedicationText,
-    });
-
     // Use the stencil-specific renderer (solid cells, real contrast) — NOT renderSmoothPreview
     const previewCanvas = renderStencilPreview(
-      applied.indices,
+      Uint8Array.from(base.indices),
       base.gridCols,
       base.gridRows,
       stencilResult.levels,
@@ -488,11 +480,11 @@ export function buildPaintingManifest(input: {
       ...base,
       version: 5 as const,
       paletteSnapshot: STENCIL_PALETTE_SNAPSHOT,
-      dedicationText: applied.dedication?.text || null,
-      dedication: applied.dedication,
+      dedicationText: null,
+      dedication: null,
       referenceImageUrl: previewDataUrl,
       previewDataUrl,
-      indices: Array.from(applied.indices),
+      indices: base.indices,
     } satisfies PaintingManifest;
   }
 
@@ -510,7 +502,6 @@ export function buildPaintingManifest(input: {
       styleProfileVersion: paintResult.styleProfileVersion,
       paletteSnapshot: paintResult.palette,
       createdAt: new Date().toISOString(),
-      dedicationText: input.dedicationText ?? order.dedicationText ?? null,
       sourceImageUrl: order.aiGeneratedUrl || getPhoto(order) || null,
       viewerUrl: buildViewerUrl(order.instructionCode, origin || BRAND.siteUrl),
       gridCols: paintResult.gridCols,

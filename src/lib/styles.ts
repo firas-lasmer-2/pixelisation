@@ -20,7 +20,7 @@ export const STYLE_DEFINITIONS: Record<ArtStyle, StyleDefinition> = {
   original: {
     key: "original",
     translationKey: "original",
-    profileVersion: 2,
+    profileVersion: 3,
     publicVisible: true,
     badgeLabel: "Popular",
     showcase: {
@@ -32,7 +32,7 @@ export const STYLE_DEFINITIONS: Record<ArtStyle, StyleDefinition> = {
   vintage: {
     key: "vintage",
     translationKey: "vintage",
-    profileVersion: 2,
+    profileVersion: 3,
     publicVisible: true,
     showcase: {
       imageUrl: "/images/style-vintage.jpg",
@@ -43,7 +43,7 @@ export const STYLE_DEFINITIONS: Record<ArtStyle, StyleDefinition> = {
   pop_art: {
     key: "pop_art",
     translationKey: "popArt",
-    profileVersion: 2,
+    profileVersion: 3,
     publicVisible: true,
     showcase: {
       imageUrl: "/images/style-popart.jpg",
@@ -54,7 +54,7 @@ export const STYLE_DEFINITIONS: Record<ArtStyle, StyleDefinition> = {
   watercolor: {
     key: "watercolor",
     translationKey: "watercolor",
-    profileVersion: 1,
+    profileVersion: 2,
     publicVisible: true,
     badgeLabel: "New",
     showcase: {
@@ -65,7 +65,7 @@ export const STYLE_DEFINITIONS: Record<ArtStyle, StyleDefinition> = {
   poster: {
     key: "poster",
     translationKey: "poster",
-    profileVersion: 1,
+    profileVersion: 2,
     publicVisible: true,
     badgeLabel: "New",
     showcase: {

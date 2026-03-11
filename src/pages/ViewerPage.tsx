@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { Navbar } from "@/components/shared/Navbar";
 import { Footer } from "@/components/landing/Footer";
 import { GridViewer } from "@/components/GridViewer";
+import { StencilViewer } from "@/components/StencilViewer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -13,11 +14,14 @@ import {
   normalizePaintingManifest,
   persistPaintingManifestLocally,
   resolveManifestPalette,
+  isStencilProduct,
   type PaintingManifest,
 } from "@/lib/paintingManifest";
 import { buildTrackUrl } from "@/lib/brand";
-import { Home, AlertCircle, Loader2, ExternalLink, Layers, Palette, Clock4, Heart, Truck, Paintbrush, Sparkles } from "lucide-react";
-import { PRODUCT_TYPE_META } from "@/lib/store";
+import { Home, AlertCircle, Loader2, ExternalLink, Layers, Palette, Clock4, Truck, Paintbrush, Sparkles, Info } from "lucide-react";
+import { PRODUCT_TYPE_META, STENCIL_DETAIL_META } from "@/lib/store";
+import type { GlitterPalette, StencilDetailLevel } from "@/lib/store";
+import { GLITTER_PALETTES } from "@/lib/glitterPalettes";
 
 const ViewerPage = () => {
   const { code } = useParams<{ code: string }>();
@@ -122,7 +126,7 @@ const ViewerPage = () => {
               <Card className="overflow-hidden border-border">
                 <CardContent className="p-0">
                   <div className="grid gap-0 lg:grid-cols-[360px_1fr]">
-                    <div className="bg-primary/5 p-5">
+                    <div className={`p-5 ${isStencilProduct(manifest.productType) ? "bg-[#463C37]" : "bg-primary/5"}`}>
                       <div className="rounded-[28px] overflow-hidden border border-primary/10 bg-background shadow-sm">
                         <img src={manifest.referenceImageUrl} alt="Painting reference" className="w-full object-cover" />
                       </div>
@@ -130,8 +134,24 @@ const ViewerPage = () => {
                     <div className="p-5 md:p-6">
                       <div className="flex flex-wrap items-center gap-2">
                         <Badge variant="secondary">{manifest.canvasLabel}</Badge>
-                        <Badge variant="outline">{manifest.stats.colorCount} colors</Badge>
-                        <Badge variant="outline">{manifest.stats.totalSections} sections</Badge>
+                        {isStencilProduct(manifest.productType) ? (
+                          <>
+                            {manifest.stencilDetailLevel && (
+                              <Badge variant="outline">
+                                {manifest.productType === "glitter_reveal" ? "Palette" : "Detail"}: {
+                                  manifest.productType === "glitter_reveal" && manifest.glitterPalette
+                                    ? GLITTER_PALETTES[manifest.glitterPalette as GlitterPalette]?.name
+                                    : STENCIL_DETAIL_META[manifest.stencilDetailLevel as StencilDetailLevel]?.label
+                                }
+                              </Badge>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <Badge variant="outline">{manifest.stats.colorCount} colors</Badge>
+                            <Badge variant="outline">{manifest.stats.totalSections} sections</Badge>
+                          </>
+                        )}
                       </div>
                       <h1 className="mt-4 text-2xl md:text-3xl font-bold">
                         {manifest.productType && manifest.productType !== "paint_by_numbers"
@@ -146,39 +166,60 @@ const ViewerPage = () => {
                           : "This viewer follows the exact same painting manifest as your PDF guide, so the color letters, section numbering, and progress all stay aligned."}
                       </p>
 
-                      <div className="mt-5 grid gap-3 md:grid-cols-4">
-                        <div className="rounded-xl border p-3">
-                          <div className="flex items-center gap-2 text-xs uppercase tracking-[0.12em] text-muted-foreground">
-                            <Layers className="h-3.5 w-3.5" /> Sections
+                      {isStencilProduct(manifest.productType) ? (
+                        <div className="mt-5 grid gap-3 md:grid-cols-3">
+                          <div className="rounded-xl border p-3">
+                            <div className="flex items-center gap-2 text-xs uppercase tracking-[0.12em] text-muted-foreground">
+                              {manifest.productType === "glitter_reveal" ? <Sparkles className="h-3.5 w-3.5" /> : <Paintbrush className="h-3.5 w-3.5" />}
+                              {manifest.productType === "glitter_reveal" ? "Palette" : "Detail"}
+                            </div>
+                            <p className="mt-2 text-lg font-semibold">
+                              {manifest.productType === "glitter_reveal" && manifest.glitterPalette
+                                ? GLITTER_PALETTES[manifest.glitterPalette as GlitterPalette]?.name || "—"
+                                : manifest.stencilDetailLevel
+                                  ? STENCIL_DETAIL_META[manifest.stencilDetailLevel as StencilDetailLevel]?.label || "—"
+                                  : "—"}
+                            </p>
                           </div>
-                          <p className="mt-2 text-lg font-semibold">{manifest.stats.totalSections}</p>
-                        </div>
-                        <div className="rounded-xl border p-3">
-                          <div className="flex items-center gap-2 text-xs uppercase tracking-[0.12em] text-muted-foreground">
-                            <Palette className="h-3.5 w-3.5" /> Difficulty
+                          <div className="rounded-xl border p-3">
+                            <div className="flex items-center gap-2 text-xs uppercase tracking-[0.12em] text-muted-foreground">
+                              <Info className="h-3.5 w-3.5" /> Product
+                            </div>
+                            <p className="mt-2 text-lg font-semibold">{PRODUCT_TYPE_META[manifest.productType].label}</p>
                           </div>
-                          <p className="mt-2 text-lg font-semibold">{manifest.stats.difficultyLabel}</p>
-                        </div>
-                        <div className="rounded-xl border p-3">
-                          <div className="flex items-center gap-2 text-xs uppercase tracking-[0.12em] text-muted-foreground">
-                            <Clock4 className="h-3.5 w-3.5" /> Time
+                          <div className="rounded-xl border p-3">
+                            <div className="flex items-center gap-2 text-xs uppercase tracking-[0.12em] text-muted-foreground">
+                              <Truck className="h-3.5 w-3.5" /> Code
+                            </div>
+                            <p className="mt-2 text-lg font-semibold font-mono">{manifest.instructionCode}</p>
                           </div>
-                          <p className="mt-2 text-lg font-semibold">{manifest.stats.estimatedHours}</p>
                         </div>
-                        <div className="rounded-xl border p-3">
-                          <div className="flex items-center gap-2 text-xs uppercase tracking-[0.12em] text-muted-foreground">
-                            <Truck className="h-3.5 w-3.5" /> Code
+                      ) : (
+                        <div className="mt-5 grid gap-3 md:grid-cols-4">
+                          <div className="rounded-xl border p-3">
+                            <div className="flex items-center gap-2 text-xs uppercase tracking-[0.12em] text-muted-foreground">
+                              <Layers className="h-3.5 w-3.5" /> Sections
+                            </div>
+                            <p className="mt-2 text-lg font-semibold">{manifest.stats.totalSections}</p>
                           </div>
-                          <p className="mt-2 text-lg font-semibold font-mono">{manifest.instructionCode}</p>
-                        </div>
-                      </div>
-
-                      {(manifest.dedication || manifest.dedicationText) && (
-                        <div className="mt-5">
-                          <Badge variant="outline" className="gap-1 rounded-full px-3 py-1">
-                            <Heart className="h-3.5 w-3.5" />
-                            Personalized edition
-                          </Badge>
+                          <div className="rounded-xl border p-3">
+                            <div className="flex items-center gap-2 text-xs uppercase tracking-[0.12em] text-muted-foreground">
+                              <Palette className="h-3.5 w-3.5" /> Difficulty
+                            </div>
+                            <p className="mt-2 text-lg font-semibold">{manifest.stats.difficultyLabel}</p>
+                          </div>
+                          <div className="rounded-xl border p-3">
+                            <div className="flex items-center gap-2 text-xs uppercase tracking-[0.12em] text-muted-foreground">
+                              <Clock4 className="h-3.5 w-3.5" /> Time
+                            </div>
+                            <p className="mt-2 text-lg font-semibold">{manifest.stats.estimatedHours}</p>
+                          </div>
+                          <div className="rounded-xl border p-3">
+                            <div className="flex items-center gap-2 text-xs uppercase tracking-[0.12em] text-muted-foreground">
+                              <Truck className="h-3.5 w-3.5" /> Code
+                            </div>
+                            <p className="mt-2 text-lg font-semibold font-mono">{manifest.instructionCode}</p>
+                          </div>
                         </div>
                       )}
 
@@ -200,57 +241,61 @@ const ViewerPage = () => {
                 </CardContent>
               </Card>
 
-              <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-                <div className="space-y-6">
-                  <GridViewer
-                    indices={new Uint8Array(manifest.indices)}
-                    gridCols={manifest.gridCols}
-                    gridRows={manifest.gridRows}
-                    palette={palette}
-                    previewDataUrl={manifest.previewDataUrl}
-                    progressKey={manifest.instructionCode}
-                  />
-                </div>
+              {isStencilProduct(manifest.productType) ? (
+                <StencilViewer manifest={manifest} />
+              ) : (
+                <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+                  <div className="space-y-6">
+                    <GridViewer
+                      indices={new Uint8Array(manifest.indices)}
+                      gridCols={manifest.gridCols}
+                      gridRows={manifest.gridRows}
+                      palette={palette}
+                      previewDataUrl={manifest.previewDataUrl}
+                      progressKey={manifest.instructionCode}
+                    />
+                  </div>
 
-                <div className="space-y-4">
-                  <Card className="border-border">
-                    <CardContent className="p-5">
-                      <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Reference Board</p>
-                      <Tabs value={referenceMode} onValueChange={(value) => setReferenceMode(value as "reference" | "source")} className="mt-4">
-                        <TabsList className="grid w-full grid-cols-2">
-                          <TabsTrigger value="reference">Paint reference</TabsTrigger>
-                          <TabsTrigger value="source" disabled={!manifest.sourceImageUrl}>
-                            Source image
-                          </TabsTrigger>
-                        </TabsList>
-                      </Tabs>
-                      <div className="mt-4 overflow-hidden rounded-2xl border bg-muted/30">
-                        {activeReferenceUrl ? (
-                          <img src={activeReferenceUrl} alt="Reference board" className="w-full object-cover" />
-                        ) : (
-                          <div className="min-h-80 flex items-center justify-center text-sm text-muted-foreground">
-                            Source image unavailable
-                          </div>
-                        )}
-                      </div>
-                      <p className="mt-3 text-sm text-muted-foreground">
-                        Keep the reference open while you paint. Use the section viewer on the left for precision and this panel for composition context.
-                      </p>
-                    </CardContent>
-                  </Card>
+                  <div className="space-y-4">
+                    <Card className="border-border">
+                      <CardContent className="p-5">
+                        <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Reference Board</p>
+                        <Tabs value={referenceMode} onValueChange={(value) => setReferenceMode(value as "reference" | "source")} className="mt-4">
+                          <TabsList className="grid w-full grid-cols-2">
+                            <TabsTrigger value="reference">Paint reference</TabsTrigger>
+                            <TabsTrigger value="source" disabled={!manifest.sourceImageUrl}>
+                              Source image
+                            </TabsTrigger>
+                          </TabsList>
+                        </Tabs>
+                        <div className="mt-4 overflow-hidden rounded-2xl border bg-muted/30">
+                          {activeReferenceUrl ? (
+                            <img src={activeReferenceUrl} alt="Reference board" className="w-full object-cover" />
+                          ) : (
+                            <div className="min-h-80 flex items-center justify-center text-sm text-muted-foreground">
+                              Source image unavailable
+                            </div>
+                          )}
+                        </div>
+                        <p className="mt-3 text-sm text-muted-foreground">
+                          Keep the reference open while you paint. Use the section viewer on the left for precision and this panel for composition context.
+                        </p>
+                      </CardContent>
+                    </Card>
 
-                  <Card className="border-border">
-                    <CardContent className="p-5">
-                      <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Painting Tips</p>
-                      <div className="mt-4 space-y-3 text-sm text-muted-foreground">
-                        <p>Start with lighter colors, then move to darker tones to keep the canvas clean.</p>
-                        <p>Use one section at a time and mark it complete in the viewer when you finish it.</p>
-                        <p>Switch between the reference and source image when you want help with details and overall composition.</p>
-                      </div>
-                    </CardContent>
-                  </Card>
+                    <Card className="border-border">
+                      <CardContent className="p-5">
+                        <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Painting Tips</p>
+                        <div className="mt-4 space-y-3 text-sm text-muted-foreground">
+                          <p>Start with lighter colors, then move to darker tones to keep the canvas clean.</p>
+                          <p>Use one section at a time and mark it complete in the viewer when you finish it.</p>
+                          <p>Switch between the reference and source image when you want help with details and overall composition.</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
         </div>

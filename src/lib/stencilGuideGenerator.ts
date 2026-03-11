@@ -36,6 +36,12 @@ const CONTENT_W = PAGE_W - MARGIN * 2;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+function detectImageFormat(dataUrl: string): string {
+  if (dataUrl.startsWith("data:image/png")) return "PNG";
+  if (dataUrl.startsWith("data:image/jpeg") || dataUrl.startsWith("data:image/jpg")) return "JPEG";
+  return "";
+}
+
 function hexToRgb(hex: string): [number, number, number] {
   return [
     parseInt(hex.slice(1, 3), 16),
@@ -199,7 +205,7 @@ async function addCoverPage(
     // Source photo frame
     doc.setFillColor(...BRAND.lightGray);
     doc.roundedRect(leftX - 2, imgY - 2, imgW + 4, imgH + 4, 3, 3, "F");
-    doc.addImage(sourceImgData, "JPEG", leftX, imgY, imgW, imgH, undefined, "MEDIUM");
+    doc.addImage(sourceImgData, detectImageFormat(sourceImgData), leftX, imgY, imgW, imgH, undefined, "MEDIUM");
     setFont(doc, "bold", 7.5);
     setColor(doc, BRAND.warmGray);
     doc.text("VOTRE PHOTO", leftX + imgW / 2, imgY + imgH + 7, { align: "center" });
@@ -207,7 +213,7 @@ async function addCoverPage(
     // Stencil preview frame
     doc.setFillColor(70, 60, 55);
     doc.roundedRect(rightX - 2, imgY - 2, imgW + 4, imgH + 4, 3, 3, "F");
-    doc.addImage(previewImgData, "JPEG", rightX, imgY, imgW, imgH, undefined, "MEDIUM");
+    doc.addImage(previewImgData, detectImageFormat(previewImgData), rightX, imgY, imgW, imgH, undefined, "MEDIUM");
     setFont(doc, "bold", 7.5);
     setColor(doc, BRAND.warmGray);
     doc.text("VOTRE POCHOIR", rightX + imgW / 2, imgY + imgH + 7, { align: "center" });
@@ -222,10 +228,17 @@ async function addCoverPage(
     const previewX = (PAGE_W - previewW) / 2;
     doc.setFillColor(70, 60, 55);
     doc.roundedRect(previewX - 2, imgY - 2, previewW + 4, imgH + 4, 4, 4, "F");
-    doc.addImage(previewImgData, "JPEG", previewX, imgY, previewW, imgH, undefined, "MEDIUM");
+    doc.addImage(previewImgData, detectImageFormat(previewImgData), previewX, imgY, previewW, imgH, undefined, "MEDIUM");
     setFont(doc, "italic", 8);
     setColor(doc, BRAND.warmGray);
     doc.text("Aperçu de votre portrait", PAGE_W / 2, imgY + imgH + 8, { align: "center" });
+  } else {
+    // No images available — text placeholder
+    doc.setFillColor(70, 60, 55);
+    doc.roundedRect(MARGIN, imgY, CONTENT_W, imgH, 4, 4, "F");
+    setFont(doc, "italic", 10);
+    setColor(doc, [200, 200, 200]);
+    doc.text("Aperçu du pochoir indisponible", PAGE_W / 2, imgY + imgH / 2, { align: "center" });
   }
 
   // Kit info section
@@ -346,7 +359,7 @@ async function addResultPreviewPage(
     // Source photo
     doc.setFillColor(...BRAND.lightGray);
     doc.roundedRect(leftX - 2, imgY - 2, imgW + 4, imgH + 4, 3, 3, "F");
-    doc.addImage(sourceImgData, "JPEG", leftX, imgY, imgW, imgH, undefined, "MEDIUM");
+    doc.addImage(sourceImgData, detectImageFormat(sourceImgData), leftX, imgY, imgW, imgH, undefined, "MEDIUM");
     setFont(doc, "bold", 7.5);
     setColor(doc, BRAND.warmGray);
     doc.text("PHOTO ORIGINALE", leftX + imgW / 2, imgY + imgH + 7, { align: "center" });
@@ -354,7 +367,7 @@ async function addResultPreviewPage(
     // Stencil
     doc.setFillColor(70, 60, 55);
     doc.roundedRect(rightX - 2, imgY - 2, imgW + 4, imgH + 4, 3, 3, "F");
-    doc.addImage(previewImgData, "JPEG", rightX, imgY, imgW, imgH, undefined, "MEDIUM");
+    doc.addImage(previewImgData, detectImageFormat(previewImgData), rightX, imgY, imgW, imgH, undefined, "MEDIUM");
     setFont(doc, "bold", 7.5);
     setColor(doc, BRAND.warmGray);
     doc.text("POCHOIR (ZONES BLANCHES)", rightX + imgW / 2, imgY + imgH + 7, { align: "center" });
@@ -381,7 +394,7 @@ async function addResultPreviewPage(
     const imgX = (PAGE_W - imgW) / 2;
     doc.setFillColor(70, 60, 55);
     doc.roundedRect(imgX - 3, imgY, imgW + 6, imgH + 6, 4, 4, "F");
-    doc.addImage(previewImgData, "JPEG", imgX, imgY + 3, imgW, imgH, undefined, "MEDIUM");
+    doc.addImage(previewImgData, detectImageFormat(previewImgData), imgX, imgY + 3, imgW, imgH, undefined, "MEDIUM");
     setFont(doc, "italic", 8);
     setColor(doc, BRAND.warmGray);
     doc.text("Aperçu généré avant révélation", PAGE_W / 2, imgY + imgH + 15, { align: "center" });
@@ -402,6 +415,13 @@ async function addResultPreviewPage(
       MARGIN + 6, reminderY + 18,
       { maxWidth: CONTENT_W - 12 },
     );
+  } else {
+    // No images available — text placeholder
+    doc.setFillColor(70, 60, 55);
+    doc.roundedRect(MARGIN, imgY, CONTENT_W, 100, 4, 4, "F");
+    setFont(doc, "italic", 10);
+    setColor(doc, [200, 200, 200]);
+    doc.text("Aperçu du pochoir indisponible", PAGE_W / 2, imgY + 50, { align: "center" });
   }
 
   drawPageFooter(doc, 3, totalPages);

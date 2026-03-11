@@ -30,7 +30,7 @@ import { SaveProgressModal } from "@/components/shared/SaveProgressModal";
 import { CropScreen } from "@/components/CropScreen";
 import { ProcessingScreen } from "@/components/ProcessingScreen";
 import { processImage, ProcessingResult } from "@/lib/imageProcessing";
-import { processStencilImage, type StencilResult } from "@/lib/stencilProcessing";
+import { processStencilImage, convertUploadedStencil, type StencilResult } from "@/lib/stencilProcessing";
 import { getStyleDefinition, getStyleDescription, getStyleLabel, orderStyleResults } from "@/lib/styles";
 import { GLITTER_PALETTES } from "@/lib/glitterPalettes";
 import { Badge } from "@/components/ui/badge";
@@ -47,7 +47,6 @@ import {
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { STORAGE_KEYS } from "@/lib/brand";
-import { DEDICATION_MAX_LENGTH, normalizeDedicationDraft } from "@/lib/dedicationOverlay";
 import { trackFunnelEvent } from "@/lib/funnel";
 /* ─── Kit visuals ─── */
 const PUBLIC_STUDIO_KITS = getPublicKitConfigs();
@@ -184,7 +183,7 @@ const Studio = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const resumeSessionId = searchParams.get("resume")?.trim() || null;
-  const { order, setCategory, setProductType, setPhoto, removePhoto, setCroppedArea, setStyle, setStylePreviewUrl, setSize, setAddOns, setStencilDetailLevel, setGlitterPalette, setContact, setShipping, setGift, setDedicationText, setDreamJob, setAiGeneratedUrl, confirmOrder } = useOrder();
+  const { order, setCategory, setProductType, setPhoto, removePhoto, setCroppedArea, setStyle, setStylePreviewUrl, setSize, setAddOns, setStencilDetailLevel, setCustomStencilDataUrl, setGlitterPalette, setContact, setShipping, setGift, setDreamJob, setAiGeneratedUrl, confirmOrder } = useOrder();
   const [step, setStep] = useState(1);
   const [processing, setProcessing] = useState(false);
   const [aiGenerating, setAiGenerating] = useState(false);
@@ -326,7 +325,6 @@ const Studio = () => {
       };
       setContact(recoveredContact);
       setContactForm(recoveredContact);
-      setDedicationText(normalizeDedicationDraft(cart.dedicationText || ""));
 
       const shouldRestartFromUpload = Boolean(cart.photoUploaded) || Number(cart.stepReached || 0) >= 3;
       const restoredStep = shouldRestartFromUpload
@@ -366,7 +364,7 @@ const Studio = () => {
     return () => {
       active = false;
     };
-  }, [resumeSessionId, sessionId, setCategory, setProductType, setStencilDetailLevel, setGlitterPalette, setContact, setDedicationText, setDreamJob, setSize]);
+  }, [resumeSessionId, sessionId, setCategory, setProductType, setStencilDetailLevel, setGlitterPalette, setContact, setDreamJob, setSize]);
 
   useEffect(() => {
     const photo = getPhoto(order);
@@ -383,7 +381,6 @@ const Studio = () => {
           stencil_detail_level: order.stencilDetailLevel || null,
           glitter_palette: order.glitterPalette || null,
           dream_job: order.dreamJob || null,
-          dedication_text: order.dedicationText || null,
           contact_phone: contactForm.phone.replace(/\D/g, "").length === 8 ? contactForm.phone : null,
           contact_email: contactForm.email || null,
           contact_first_name: contactForm.firstName || null,
@@ -392,7 +389,7 @@ const Studio = () => {
     };
     const timer = setTimeout(save, 2000);
     return () => clearTimeout(timer);
-  }, [step, order.selectedSize, order.selectedStyle, order.photos, order.category, order.productType, order.stencilDetailLevel, order.glitterPalette, order.dreamJob, order.dedicationText, contactForm.phone, contactForm.email, contactForm.firstName, sessionId]);
+  }, [step, order.selectedSize, order.selectedStyle, order.photos, order.category, order.productType, order.stencilDetailLevel, order.glitterPalette, order.dreamJob, contactForm.phone, contactForm.email, contactForm.firstName, sessionId]);
 
   useEffect(() => {
     if (lastTrackedStepRef.current === step) return;
@@ -543,6 +540,30 @@ const Studio = () => {
     }
   }, [order.photos, order.aiGeneratedUrl, order.selectedSize, order.category, order.productType, order.stencilDetailLevel, isStencilProduct, isAICategory, setCroppedArea, setStencilDetailLevel, setStylePreviewUrl]);
 
+  /* Custom stencil upload handler */
+  const handleCustomStencilUpload = useCallback(async (file: File) => {
+    if (!order.selectedSize) return;
+    setProcessing(true);
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const kitSize = resolveProcessingKitSize(order.selectedSize);
+      const result = await convertUploadedStencil(dataUrl, kitSize);
+      setCustomStencilDataUrl(dataUrl);
+      setStencilDetailLevel("medium");
+      setStencilPreviews({ medium: result.dataUrl });
+      setStylePreviewUrl(result.dataUrl);
+      setProcessing(false);
+    } catch (err) {
+      console.error("Custom stencil upload failed:", err);
+      setProcessing(false);
+    }
+  }, [order.selectedSize, setCustomStencilDataUrl, setStencilDetailLevel, setStylePreviewUrl]);
+
   /* AI Generation */
   const handleAIGenerate = async () => {
     setAiGenerating(true);
@@ -626,7 +647,6 @@ const Studio = () => {
         shipping: shippingForm,
         isGift,
         giftMessage,
-        dedicationText: order.dedicationText,
         couponCode: appliedCoupon?.code || null,
         sessionId,
       });
@@ -1237,15 +1257,42 @@ const Studio = () => {
                         subtitle="Plus de détail = plus de finesse dans les contours du pochoir."
                       />
                       <StencilDetailPicker
-                        selected={order.stencilDetailLevel}
-                        onSelect={(level) => { setStencilDetailLevel(level); setStylePreviewUrl(stencilPreviews[level] || ""); }}
+                        selected={order.customStencilDataUrl ? null : order.stencilDetailLevel}
+                        onSelect={(level) => { setCustomStencilDataUrl(""); setStencilDetailLevel(level); setStylePreviewUrl(stencilPreviews[level] || ""); }}
                         previewDataUrls={stencilPreviews}
                       />
+
+                      <div className="mt-6 rounded-xl border-2 border-dashed border-border p-4 text-center">
+                        <p className="text-sm text-muted-foreground mb-3">
+                          Ou importez votre propre pochoir (PNG noir & blanc)
+                        </p>
+                        <label className="inline-flex items-center gap-2 cursor-pointer rounded-lg bg-secondary px-4 py-2 text-sm font-medium hover:bg-secondary/80 transition-colors">
+                          <Upload className="h-4 w-4" />
+                          {order.customStencilDataUrl ? "Remplacer le pochoir" : "Importer un pochoir"}
+                          <input
+                            type="file"
+                            accept="image/png,image/svg+xml,image/jpeg"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) handleCustomStencilUpload(file);
+                              e.target.value = "";
+                            }}
+                          />
+                        </label>
+                        {order.customStencilDataUrl && (
+                          <div className="mt-3 flex items-center justify-center gap-2 text-sm text-green-600">
+                            <Check className="h-4 w-4" />
+                            Pochoir personnalisé importé
+                          </div>
+                        )}
+                      </div>
+
                       <div className="mt-8 flex gap-3">
                         <Button variant="outline" onClick={() => goToStep(getCropStep())} className="gap-2">
                           <BackIcon className="h-4 w-4" /> {t.studio.back}
                         </Button>
-                        <Button onClick={() => goToStep(getConfirmStep())} disabled={!order.stencilDetailLevel} className="flex-1 gap-2 btn-premium text-primary-foreground border-0">
+                        <Button onClick={() => goToStep(getConfirmStep())} disabled={!order.stencilDetailLevel && !order.customStencilDataUrl} className="flex-1 gap-2 btn-premium text-primary-foreground border-0">
                           {t.studio.next} <NextIcon className="h-4 w-4" />
                         </Button>
                       </div>
@@ -1422,25 +1469,6 @@ const Studio = () => {
                           </div>
                         )}
                       </div>
-
-                      <div className="rounded-xl border bg-card p-6">
-                        <div className="mb-4 flex items-center gap-2">
-                          <Edit3 className="h-4 w-4 text-primary" />
-                          <h3 className="text-sm font-bold uppercase tracking-[0.1em] section-gold-line pb-2">Dedication</h3>
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-xs font-semibold">Short line for the guide or viewer (optional)</Label>
-                          <Textarea
-                            value={order.dedicationText}
-                            onChange={(e) => setDedicationText(normalizeDedicationDraft(e.target.value))}
-                            placeholder="I love you • 14.02.2026"
-                            rows={2}
-                          />
-                          <p className="text-xs text-muted-foreground">
-                            {order.dedicationText.length}/{DEDICATION_MAX_LENGTH} characters. Best for names, dates, or a short message.
-                          </p>
-                        </div>
-                      </div>
                     </div>
 
                     {/* Right: Premium Order Summary */}
@@ -1465,12 +1493,6 @@ const Studio = () => {
                           )}
 
                           <div className="space-y-2.5">
-                            {order.dedicationText && (
-                              <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2">
-                                <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">Dedication</p>
-                                <p className="mt-1 text-sm font-medium">{order.dedicationText}</p>
-                              </div>
-                            )}
                             <div className="flex items-center justify-between text-sm">
                               <span className="text-muted-foreground">{selectionSummaryTitle}</span>
                               <div className="flex items-center gap-2">

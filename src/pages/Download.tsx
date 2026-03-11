@@ -9,26 +9,22 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { generatePaintByNumbersPDF } from "@/lib/pdfGenerator";
 import { generateStencilGuide } from "@/lib/stencilGuideGenerator";
 import { processImage, type ProcessingResult } from "@/lib/imageProcessing";
-import { processStencilImage, type StencilResult } from "@/lib/stencilProcessing";
+import { processStencilImage, convertUploadedStencil, type StencilResult } from "@/lib/stencilProcessing";
+import { isRevealApiAvailable, generateReveal, waitForJob, type RevealJobStatus } from "@/lib/revealApi";
 import { GridViewer } from "@/components/GridViewer";
+import { StencilViewer } from "@/components/StencilViewer";
 import {
   buildPaintingManifest,
   normalizePaintingManifest,
   orderStyleToPaletteKey,
   persistPaintingManifestLocally,
   resolveManifestPalette,
+  isStencilProduct,
   type PaintingManifest,
 } from "@/lib/paintingManifest";
-import {
-  DEDICATION_MAX_LENGTH,
-  normalizeDedicationDraft,
-  sanitizeDedicationText,
-} from "@/lib/dedicationOverlay";
 import { buildViewerUrl, BRAND } from "@/lib/brand";
 import { GLITTER_PALETTES } from "@/lib/glitterPalettes";
 import { getStyleLabel } from "@/lib/styles";
@@ -47,15 +43,12 @@ import {
   Image as ImageIcon,
   Share2,
   ExternalLink,
-  Heart,
   ChevronDown,
-  PenLine,
-  Sparkles,
 } from "lucide-react";
 
 const Download = () => {
   const { t } = useTranslation();
-  const { order, setDedicationText } = useOrder();
+  const { order } = useOrder();
   const navigate = useNavigate();
   const [generating, setGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -64,9 +57,6 @@ const Download = () => {
   const [processingResult, setProcessingResult] = useState<ProcessingResult | StencilResult | null>(null);
   const [paintingManifest, setPaintingManifest] = useState<PaintingManifest | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [dedicationOpen, setDedicationOpen] = useState(false);
-  const [dedicationDraft, setDedicationDraft] = useState(order.dedicationText || "");
-  const [savingDedication, setSavingDedication] = useState(false);
 
   const dl = t.download;
   const isPaintByNumbers = order.productType === "paint_by_numbers";
@@ -97,16 +87,8 @@ const Download = () => {
     return order.glitterPalette ? GLITTER_PALETTES[order.glitterPalette].name : PRODUCT_TYPE_META[order.productType].label;
   }, [order.productType, order.selectedStyle, order.stencilDetailLevel, order.glitterPalette, t]);
   const viewerPath = order.instructionCode ? buildViewerUrl(order.instructionCode, window.location.origin).replace(window.location.origin, "") : "";
-  const sanitizedSavedDedication = useMemo(() => sanitizeDedicationText(order.dedicationText), [order.dedicationText]);
-  const sanitizedDraftDedication = useMemo(() => sanitizeDedicationText(dedicationDraft), [dedicationDraft]);
-  const hasDedication = Boolean(sanitizedDraftDedication || paintingManifest?.dedication?.text);
-  const dedicationDirty = sanitizedDraftDedication !== sanitizedSavedDedication;
 
   const sourceForProcessing = order.aiGeneratedUrl || getPhoto(order);
-
-  useEffect(() => {
-    setDedicationDraft(order.dedicationText || "");
-  }, [order.dedicationText]);
 
   const processIfNeeded = async (): Promise<ProcessingResult | StencilResult> => {
     if (processingResult) return processingResult;
@@ -119,6 +101,54 @@ const Download = () => {
     };
 
     if (!isPaintByNumbers) {
+      if (order.customStencilDataUrl) {
+        const stencilResult = await convertUploadedStencil(order.customStencilDataUrl, kitSize);
+        setProcessingResult(stencilResult);
+        return stencilResult;
+      }
+
+      // Try Python backend for stencil/glitter products
+      if (isRevealApiAvailable() && sourceForProcessing) {
+        try {
+          const sourceBlob = await fetch(sourceForProcessing).then((r) => r.blob());
+          const job = await generateReveal({
+            file: sourceBlob,
+            detailLevel: order.stencilDetailLevel || "medium",
+            kitSize: order.selectedSize || "stamp_kit_30x40",
+            productType: order.productType,
+            crop: cropData,
+            orderRef: order.orderRef || "",
+            instructionCode: order.instructionCode || "",
+            glitterPalette: order.glitterPalette || "",
+          });
+
+          const result = await waitForJob(job.job_id, (status: RevealJobStatus) => {
+            setProgress(Math.min(90, status.progress));
+            setProgressLabel(status.stage);
+          });
+
+          if (result.status === "completed" && result.manifest) {
+            const manifest = normalizePaintingManifest(result.manifest, order.instructionCode);
+            if (manifest) {
+              setPaintingManifest(manifest);
+              persistPaintingManifestLocally(manifest);
+              // Return a StencilResult-compatible object for downstream compatibility
+              const stencilResult: StencilResult = {
+                indices: new Uint8Array(manifest.indices),
+                gridCols: manifest.gridCols,
+                gridRows: manifest.gridRows,
+                palette: resolveManifestPalette(manifest),
+              };
+              setProcessingResult(stencilResult);
+              return stencilResult;
+            }
+          }
+        } catch (backendError) {
+          console.warn("Reveal backend unavailable, falling back to client-side:", backendError);
+        }
+      }
+
+      // Client-side fallback
       const stencilResult = await processStencilImage(
         sourceForProcessing,
         cropData,
@@ -165,11 +195,8 @@ const Download = () => {
     return manifest;
   };
 
-  const ensureManifest = async (dedicationText = sanitizedDraftDedication): Promise<PaintingManifest> => {
-    if (
-      paintingManifest &&
-      sanitizeDedicationText(paintingManifest.dedicationText) === sanitizeDedicationText(dedicationText)
-    ) {
+  const ensureManifest = async (): Promise<PaintingManifest> => {
+    if (paintingManifest) {
       return paintingManifest;
     }
 
@@ -178,29 +205,8 @@ const Download = () => {
       order,
       result,
       origin: window.location.origin,
-      dedicationText,
     });
     return persistManifest(manifest);
-  };
-
-  const commitDedication = async () => {
-    const nextDedication = sanitizedDraftDedication;
-
-    if (!dedicationDirty && paintingManifest) {
-      return paintingManifest;
-    }
-
-    setSavingDedication(true);
-    setError(null);
-    setDedicationText(nextDedication);
-    setPdfBlob(null);
-    setProgress(0);
-
-    try {
-      return await ensureManifest(nextDedication);
-    } finally {
-      setSavingDedication(false);
-    }
   };
 
   const handleGenerate = async () => {
@@ -212,7 +218,7 @@ const Download = () => {
     try {
       setProgressLabel(dl.progressSteps[0]);
       setProgress(20);
-      const manifest = await commitDedication();
+      const manifest = await ensureManifest();
       setProgressLabel(dl.progressSteps[1]);
       setProgress(55);
       const blob = manifest.productType === "paint_by_numbers"
@@ -237,7 +243,7 @@ const Download = () => {
     try {
       setProgressLabel(dl.progressSteps[0]);
       setProgress(30);
-      await commitDedication();
+      await ensureManifest();
       setProgressLabel(dl.progressSteps[1]);
       setProgress(100);
     } catch (viewerError) {
@@ -260,9 +266,9 @@ const Download = () => {
 
   const handleSharePreview = async () => {
     const manifest =
-      paintingManifest && !dedicationDirty
+      paintingManifest
         ? paintingManifest
-        : await ensureManifest(sanitizedDraftDedication);
+        : await ensureManifest();
     if (!manifest) return;
 
     try {
@@ -301,7 +307,11 @@ const Download = () => {
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
                 <FileText className="h-8 w-8 text-primary" />
               </div>
-              <h1 className="text-2xl md:text-3xl font-bold mb-2">{dl.title}</h1>
+              <h1 className="text-2xl md:text-3xl font-bold mb-2">
+                {isStencilProduct(order.productType)
+                  ? order.productType === "glitter_reveal" ? "Glitter Reveal Guide" : "Stencil Reveal Guide"
+                  : dl.title}
+              </h1>
               <p className="text-muted-foreground">{dl.subtitle}</p>
             </div>
 
@@ -324,31 +334,41 @@ const Download = () => {
                       <Badge variant="secondary">{canvasLabel}</Badge>
                       <Badge variant="outline">{selectedStyleLabel}</Badge>
                       {!isPaintByNumbers && <Badge variant="secondary">{PRODUCT_TYPE_META[order.productType].label}</Badge>}
-                      {activeManifest && <Badge variant="outline">{activeManifest.stats.totalSections} sections</Badge>}
-                      {activeManifest && <Badge variant="outline">{activeManifest.stats.colorCount} colors</Badge>}
-                      {hasDedication && (
-                        <Badge variant="outline" className="gap-1">
-                          <Heart className="h-3.5 w-3.5" />
-                          Personalized edition
-                        </Badge>
-                      )}
+                      {activeManifest && !isStencilProduct(order.productType) && <Badge variant="outline">{activeManifest.stats.totalSections} sections</Badge>}
+                      {activeManifest && !isStencilProduct(order.productType) && <Badge variant="outline">{activeManifest.stats.colorCount} colors</Badge>}
                     </div>
-                    <h2 className="mt-4 text-2xl font-bold">Painting Guide v2</h2>
+                    <h2 className="mt-4 text-2xl font-bold">
+                      {isStencilProduct(order.productType)
+                        ? order.productType === "glitter_reveal" ? "Glitter Reveal Guide" : "Stencil Reveal Guide"
+                        : "Painting Guide v2"}
+                    </h2>
                     <p className="mt-2 text-sm text-muted-foreground max-w-2xl">
-                      Your PDF and live viewer now follow the same painting manifest, so the sections, colors, and instruction code stay aligned across both formats.
+                      {isStencilProduct(order.productType)
+                        ? "Your PDF guide includes step-by-step instructions, stencil preview, and kit information for a perfect reveal."
+                        : "Your PDF and live viewer now follow the same painting manifest, so the sections, colors, and instruction code stay aligned across both formats."}
                     </p>
                     <div className="mt-5 grid gap-3 sm:grid-cols-3">
                       <div className="rounded-xl border p-3">
                         <div className="flex items-center gap-2 text-muted-foreground text-xs uppercase tracking-[0.12em]">
-                          <Grid3X3 className="h-3.5 w-3.5" /> Grid
+                          <Grid3X3 className="h-3.5 w-3.5" /> {isStencilProduct(order.productType)
+                            ? order.productType === "glitter_reveal" ? "Palette" : "Detail"
+                            : "Grid"}
                         </div>
-                        <p className="mt-2 text-sm font-medium">{activeManifest ? `${activeManifest.gridCols} × ${activeManifest.gridRows}` : "Ready after processing"}</p>
+                        <p className="mt-2 text-sm font-medium">
+                          {isStencilProduct(order.productType)
+                            ? selectedStyleLabel
+                            : activeManifest ? `${activeManifest.gridCols} × ${activeManifest.gridRows}` : "Ready after processing"}
+                        </p>
                       </div>
                       <div className="rounded-xl border p-3">
                         <div className="flex items-center gap-2 text-muted-foreground text-xs uppercase tracking-[0.12em]">
-                          <Palette className="h-3.5 w-3.5" /> Difficulty
+                          <Palette className="h-3.5 w-3.5" /> {isStencilProduct(order.productType) ? "Product" : "Difficulty"}
                         </div>
-                        <p className="mt-2 text-sm font-medium">{activeManifest?.stats.difficultyLabel || "Based on kit size"}</p>
+                        <p className="mt-2 text-sm font-medium">
+                          {isStencilProduct(order.productType)
+                            ? PRODUCT_TYPE_META[order.productType].label
+                            : activeManifest?.stats.difficultyLabel || "Based on kit size"}
+                        </p>
                       </div>
                       <div className="rounded-xl border p-3">
                         <div className="flex items-center gap-2 text-muted-foreground text-xs uppercase tracking-[0.12em]">
@@ -359,97 +379,6 @@ const Download = () => {
                     </div>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-
-            <Card className="mb-6 border-primary/10">
-              <CardContent className="p-5">
-                <Collapsible open={dedicationOpen} onOpenChange={setDedicationOpen}>
-                  <CollapsibleTrigger className="flex w-full items-center justify-between gap-4 text-left">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <PenLine className="h-4 w-4 text-primary" />
-                        <p className="text-sm font-semibold">Personalize artwork</p>
-                      </div>
-                      <p className="mt-2 text-sm text-muted-foreground">
-                        {hasDedication
-                          ? "Your dedication is painted into the bottom-right corner of the artwork."
-                          : "Optionally add a short dedication that becomes part of the paintable design."}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant={hasDedication ? "secondary" : "outline"}>
-                        {hasDedication ? "Dedication included" : "Optional"}
-                      </Badge>
-                      <ChevronDown
-                        className={`h-4 w-4 text-muted-foreground transition-transform ${
-                          dedicationOpen ? "rotate-180" : ""
-                        }`}
-                      />
-                    </div>
-                  </CollapsibleTrigger>
-
-                  <CollapsibleContent className="pt-4">
-                    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
-                      <div className="space-y-3">
-                        <div className="space-y-2">
-                          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                            Dedication
-                          </p>
-                          <Textarea
-                            value={dedicationDraft}
-                            onChange={(event) => setDedicationDraft(normalizeDedicationDraft(event.target.value))}
-                            placeholder="I love her • 14.02.2026"
-                            rows={3}
-                          />
-                          <div className="flex items-center justify-between text-xs text-muted-foreground">
-                            <span>Up to {DEDICATION_MAX_LENGTH} characters. Emojis are not supported.</span>
-                            <span>{dedicationDraft.length}/{DEDICATION_MAX_LENGTH}</span>
-                          </div>
-                        </div>
-
-                        <div className="flex flex-wrap gap-3">
-                          <Button
-                            type="button"
-                            onClick={() => void commitDedication()}
-                            disabled={savingDedication || (!dedicationDirty && paintingManifest !== null)}
-                            className="gap-2 rounded-full"
-                          >
-                            {savingDedication ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                            {savingDedication ? "Saving..." : "Apply to preview"}
-                          </Button>
-                          {hasDedication && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              onClick={() => setDedicationDraft("")}
-                              disabled={savingDedication}
-                              className="rounded-full"
-                            >
-                              Clear dedication
-                            </Button>
-                          )}
-                        </div>
-
-                        {dedicationDirty && (
-                          <p className="text-xs text-muted-foreground">
-                            Unsaved changes will be applied automatically when you generate the PDF or prepare the viewer.
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="rounded-2xl border bg-primary/5 p-4">
-                        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                          Style
-                        </p>
-                        <p className="mt-2 text-sm font-medium">Signature plaque v1</p>
-                        <p className="mt-3 text-sm text-muted-foreground">
-                          The message sits inside the artwork in the bottom-right corner and becomes part of the paint-by-numbers canvas, PDF preview, and live viewer.
-                        </p>
-                      </div>
-                    </div>
-                  </CollapsibleContent>
-                </Collapsible>
               </CardContent>
             </Card>
 
@@ -479,7 +408,7 @@ const Download = () => {
                         </div>
                         <h3 className="text-lg font-semibold">Manifest-based PDF ready</h3>
                         <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                          Generate the premium guide with the embedded dedication plaque, viewer QR, color legend, section pages, and the shared instruction code.
+                          Generate the premium guide with the viewer QR, color legend, section pages, and the shared instruction code.
                         </p>
                         <Button size="lg" onClick={handleGenerate} className="rounded-full px-8 shimmer-btn">
                           <FileText className="mr-2 h-5 w-5" />
@@ -564,14 +493,18 @@ const Download = () => {
                             </Button>
                           )}
                         </div>
-                        <GridViewer
-                          indices={new Uint8Array(activeManifest.indices)}
-                          gridCols={activeManifest.gridCols}
-                          gridRows={activeManifest.gridRows}
-                          palette={viewerPalette || resolveManifestPalette(activeManifest)}
-                          previewDataUrl={activeManifest.previewDataUrl}
-                          progressKey={activeManifest.instructionCode}
-                        />
+                        {isStencilProduct(order.productType) ? (
+                          <StencilViewer manifest={activeManifest} />
+                        ) : (
+                          <GridViewer
+                            indices={new Uint8Array(activeManifest.indices)}
+                            gridCols={activeManifest.gridCols}
+                            gridRows={activeManifest.gridRows}
+                            palette={viewerPalette || resolveManifestPalette(activeManifest)}
+                            previewDataUrl={activeManifest.previewDataUrl}
+                            progressKey={activeManifest.instructionCode}
+                          />
+                        )}
                       </>
                     )}
                   </CardContent>
@@ -599,7 +532,11 @@ const Download = () => {
                       <div className="space-y-4">
                         <div className="grid gap-4 lg:grid-cols-2">
                           <div className="rounded-2xl border overflow-hidden">
-                            <div className="border-b px-4 py-3 text-sm font-medium">Painting reference</div>
+                            <div className="border-b px-4 py-3 text-sm font-medium">
+                            {isStencilProduct(order.productType)
+                              ? order.productType === "glitter_reveal" ? "Glitter preview" : "Stencil preview"
+                              : "Painting reference"}
+                          </div>
                             <img src={activeManifest.referenceImageUrl} alt="Reference" className="w-full h-full object-cover" />
                           </div>
                           <div className="rounded-2xl border overflow-hidden">

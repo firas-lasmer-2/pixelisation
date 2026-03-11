@@ -1,0 +1,11 @@
+services:
+  reveal:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./storage:/app/storage
+    env_file:
+      - .env
+    environment:
+      - STORAGE_ROOT=/app/storage

@@ -16,7 +16,7 @@
 
 import type { ProcessingKitSize } from "./kitCatalog";
 import { PROCESSING_GRID_CONFIG } from "./kitCatalog";
-import { bilateralFilter, computeEdgeMap, progressiveDownscale, sigmoidContrast } from "./imageProcessing";
+import { bilateralFilter, progressiveDownscale, sigmoidContrast } from "./imageProcessing";
 import type { StencilDetailLevel } from "./store";
 
 // ─── Public types ────────────────────────────────────────────────────────────
@@ -38,19 +38,38 @@ const DETAIL_CONFIG: Record<
   StencilDetailLevel,
   { levels: number; bilateralPasses: number; minRegionSize: number; sigmoidK: number }
 > = {
-  bold:   { levels: 2, bilateralPasses: 3, minRegionSize: 12, sigmoidK: 10 },
-  medium: { levels: 3, bilateralPasses: 2, minRegionSize: 6,  sigmoidK: 8  },
-  fine:   { levels: 4, bilateralPasses: 1, minRegionSize: 3,  sigmoidK: 6  },
+  bold:   { levels: 2, bilateralPasses: 1, minRegionSize: 10, sigmoidK: 12 },
+  medium: { levels: 3, bilateralPasses: 1, minRegionSize: 3,  sigmoidK: 10 },
+  fine:   { levels: 4, bilateralPasses: 0, minRegionSize: 2,  sigmoidK: 8  },
 };
 
-// Visual palette for rendering the stencil preview on canvas
-// index 0 = dark background (painted/glittered area), 1+ = portrait levels (light → white)
-const STENCIL_RENDER_COLORS = [
-  { r: 70,  g: 60,  b: 55  }, // background — dark warm (painted/glittered area)
-  { r: 255, g: 255, b: 255 }, // portrait level 1 — white (stencil)
-  { r: 210, g: 205, b: 200 }, // portrait level 2 — very light warm gray
-  { r: 160, g: 155, b: 150 }, // portrait level 3 — light-medium warm gray
-];
+/**
+ * Generate render colors for stencil preview.
+ * Index 0 = dark background, higher indices = progressively brighter (portrait).
+ * 2-level: [dark, white]
+ * 3-level: [dark, warm-gray, white]
+ * 4-level: [dark, gray, light-gray, white]
+ */
+function getStencilRenderColors(levels: number) {
+  const bg = { r: 40, g: 35, b: 32 };
+  if (levels <= 2) return [bg, { r: 255, g: 255, b: 255 }];
+
+  const colors = [bg];
+  for (let i = 1; i < levels; i++) {
+    const t = i / (levels - 1);
+    colors.push({
+      r: Math.round(120 + t * 135),
+      g: Math.round(115 + t * 140),
+      b: Math.round(110 + t * 145),
+    });
+  }
+  return colors;
+}
+
+export function getStencilLevels(detailLevel: StencilDetailLevel | null | undefined): number {
+  if (!detailLevel || !(detailLevel in DETAIL_CONFIG)) return 2;
+  return DETAIL_CONFIG[detailLevel].levels;
+}
 
 // ─── Main entry point ────────────────────────────────────────────────────────
 
@@ -77,27 +96,30 @@ export async function processStencilImage(
   // 4. Grayscale conversion (luminance-weighted)
   const gray = toGrayscale(imageData);
 
-  // 5. Sigmoid contrast enhancement to stretch tonal range
+  // 5. Save original grayscale for luminance band splitting (before sigmoid crushes it)
+  const originalGray = new Uint8ClampedArray(gray.data);
+
+  // 6. Sigmoid contrast enhancement for binary bg/portrait separation
   sigmoidContrast(gray.data, gray.width, gray.height, cfg.sigmoidK);
 
-  // 6. Bilateral filter for noise reduction while preserving edges
+  // 7. Light bilateral filter for noise reduction while preserving edges
+  //    Use smaller sigma/radius than paint-by-numbers to keep stencil edges crisp
   for (let i = 0; i < cfg.bilateralPasses; i++) {
-    bilateralFilter(gray.data, gray.width, gray.height, 2.5, 20, 2);
+    bilateralFilter(gray.data, gray.width, gray.height, 1.5, 15, 1);
   }
 
-  // 7. Edge map for contour-aware thresholding
-  const edgeMap = computeEdgeMap(gray.data, cols, rows);
+  // 8. Adaptive multi-level thresholding using luminance bands
+  //    - gray.data (post-sigmoid) for binary bg/portrait split
+  //    - originalGray for luminance band subdivision within portrait
+  const indices = adaptiveThreshold(gray.data, originalGray, cols, rows, cfg.levels);
 
-  // 8. Adaptive multi-level thresholding
-  const indices = adaptiveThreshold(gray.data, cols, rows, edgeMap, cfg.levels);
-
-  // 9. Stencil bridge analysis — connect floating background islands
+  // 8. Stencil bridge analysis — connect floating background islands
   const { bridgeCount } = addStencilBridges(indices, cols, rows);
 
-  // 10. Clean up physically impractical tiny regions
+  // 9. Clean up physically impractical tiny regions
   cleanSmallRegions(indices, cols, rows, cfg.minRegionSize, cfg.levels);
 
-  // 11. Auto-correct if the stencil looks inverted.
+  // 10. Auto-correct if the stencil looks inverted.
   // Otsu thresholding treats "bright = portrait", but for photos with bright
   // backgrounds (most indoor/studio shots) the background gets labelled as
   // portrait and the face ends up as background (all dark). Detect this by
@@ -107,7 +129,7 @@ export async function processStencilImage(
   // case where no portrait was detected at all.
   autoCorrectInversion(indices, cols, rows, cfg.levels);
 
-  // 12. Render preview canvas
+  // 11. Render preview canvas
   const canvas = renderStencilPreview(indices, cols, rows, cfg.levels);
 
   return {
@@ -137,21 +159,15 @@ function applyCrop(
   img: HTMLImageElement,
   crop: { x: number; y: number; width: number; height: number },
 ): HTMLCanvasElement {
-  const canvas = document.createElement("canvas");
-  canvas.width = img.naturalWidth;
-  canvas.height = img.naturalHeight;
-  const ctx = canvas.getContext("2d")!;
-  ctx.drawImage(img, 0, 0);
-
   const cropCanvas = document.createElement("canvas");
-  const cropW = (crop.width / 100) * img.naturalWidth;
-  const cropH = (crop.height / 100) * img.naturalHeight;
-  const cropX = (crop.x / 100) * img.naturalWidth;
-  const cropY = (crop.y / 100) * img.naturalHeight;
-  cropCanvas.width = cropW;
-  cropCanvas.height = cropH;
+  cropCanvas.width = crop.width;
+  cropCanvas.height = crop.height;
   const cropCtx = cropCanvas.getContext("2d")!;
-  cropCtx.drawImage(canvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+  cropCtx.drawImage(
+    img,
+    crop.x, crop.y, crop.width, crop.height,
+    0, 0, crop.width, crop.height,
+  );
   return cropCanvas;
 }
 
@@ -176,123 +192,88 @@ function toGrayscale(src: ImageData): ImageData {
 }
 
 /**
- * Adaptive multi-level thresholding using Otsu's method extended to N levels.
- * Produces indices: 0=background (dark pixels), 1+=portrait levels (bright pixels).
+ * Adaptive thresholding using binary Otsu + luminance bands.
  *
- * The convention is inverted from natural grayscale: bright areas → portrait (white
- * after stencil removal), dark areas → background (where glitter/paint goes).
+ * 1. Single-threshold Otsu on post-sigmoid data separates background from portrait.
+ * 2. For levels > 2: within the portrait region, use ORIGINAL (pre-sigmoid)
+ *    luminance to split into tonal bands. Sigmoid crushes all values toward
+ *    0 or 255, destroying the tonal variation needed for bands — so we must
+ *    read from the original grayscale.
  */
 function adaptiveThreshold(
   data: Uint8ClampedArray,
+  originalGray: Uint8ClampedArray,
   w: number,
   h: number,
-  edgeMap: Float32Array,
   levels: number,
 ): Uint8Array {
   const n = w * h;
   const indices = new Uint8Array(n);
 
-  // Build histogram
+  // Build histogram from post-sigmoid data (good for binary split)
   const hist = new Float64Array(256);
   for (let i = 0; i < n; i++) hist[data[i * 4]]++;
   for (let i = 0; i < 256; i++) hist[i] /= n;
 
-  // Find thresholds using multi-level Otsu
-  const thresholds = multiLevelOtsu(hist, levels);
+  // Single-threshold Otsu — reliable binary separation
+  const threshold = otsuSingleThreshold(hist);
+  const maxLevel = levels - 1;
 
-  // Assign levels: 0=background(dark), levels-1=portrait(bright)
+  // Binary assignment: 0 = background (dark), maxLevel = portrait (bright)
   for (let i = 0; i < n; i++) {
-    const lum = data[i * 4];
-    let level = 0;
-    for (let t = 0; t < thresholds.length; t++) {
-      if (lum > thresholds[t]) level = t + 1;
-    }
-    // Invert: bright → high index (portrait), dark → 0 (background)
-    indices[i] = level;
+    indices[i] = data[i * 4] > threshold ? maxLevel : 0;
   }
 
-  // Edge refinement: snap edge pixels to binary (0 or max) for clean stencil cuts
-  const maxLevel = levels - 1;
-  for (let i = 0; i < n; i++) {
-    if (edgeMap[i] > 0.35) {
-      // On strong edges, snap to nearest extreme
-      indices[i] = indices[i] >= Math.ceil(maxLevel / 2) ? maxLevel : 0;
+  // For levels > 2: split portrait region into luminance bands
+  // using ORIGINAL grayscale (pre-sigmoid) which preserves tonal variation
+  if (levels > 2) {
+    // Collect original luminance values of all portrait pixels
+    const portraitLuminances: number[] = [];
+    for (let i = 0; i < n; i++) {
+      if (indices[i] === maxLevel) {
+        portraitLuminances.push(originalGray[i * 4]);
+      }
+    }
+
+    if (portraitLuminances.length > 0) {
+      portraitLuminances.sort((a, b) => a - b);
+
+      // Compute percentile thresholds to split portrait into bands
+      // 3 levels → dark 30% = contour, bright 70% = white
+      // 4 levels → dark 25% = deep contour, mid 25% = light contour, bright 50% = white
+      const bandThresholds: number[] = [];
+      if (levels === 3) {
+        bandThresholds.push(portraitLuminances[Math.floor(portraitLuminances.length * 0.30)]);
+      } else {
+        bandThresholds.push(portraitLuminances[Math.floor(portraitLuminances.length * 0.25)]);
+        bandThresholds.push(portraitLuminances[Math.floor(portraitLuminances.length * 0.50)]);
+      }
+
+      // Reassign portrait pixels to bands using ORIGINAL luminance
+      for (let i = 0; i < n; i++) {
+        if (indices[i] === maxLevel) {
+          const lum = originalGray[i * 4];
+          let band = 1;
+          for (let t = 0; t < bandThresholds.length; t++) {
+            if (lum > bandThresholds[t]) {
+              band = t + 2;
+            }
+          }
+          indices[i] = Math.min(band, maxLevel);
+        }
+      }
     }
   }
 
   return indices;
 }
 
-/**
- * Multi-level Otsu thresholding.
- * Returns (levels - 1) threshold values that separate `levels` classes.
- */
-function multiLevelOtsu(hist: Float64Array, levels: number): number[] {
-  const numThresholds = levels - 1;
-
-  if (numThresholds === 1) {
-    // Classic single-threshold Otsu
-    return [otsuSingleThreshold(hist)];
-  }
-
-  // For 2 thresholds (3 levels): exhaustive search over (t1, t2)
-  if (numThresholds === 2) {
-    let bestVar = -Infinity;
-    let bestT1 = 85;
-    let bestT2 = 170;
-
-    const mu = computeMean(hist, 0, 255);
-
-    for (let t1 = 1; t1 < 254; t1++) {
-      for (let t2 = t1 + 1; t2 < 255; t2++) {
-        const w0 = computeWeight(hist, 0, t1 - 1);
-        const w1 = computeWeight(hist, t1, t2 - 1);
-        const w2 = computeWeight(hist, t2, 255);
-        if (w0 === 0 || w1 === 0 || w2 === 0) continue;
-
-        const mu0 = computeMean(hist, 0, t1 - 1) / w0;
-        const mu1 = computeMean(hist, t1, t2 - 1) / w1;
-        const mu2 = computeMean(hist, t2, 255) / w2;
-
-        const varBetween =
-          w0 * (mu0 - mu) ** 2 +
-          w1 * (mu1 - mu) ** 2 +
-          w2 * (mu2 - mu) ** 2;
-
-        if (varBetween > bestVar) {
-          bestVar = varBetween;
-          bestT1 = t1;
-          bestT2 = t2;
-        }
-      }
-    }
-    return [bestT1, bestT2];
-  }
-
-  // For 3 thresholds (4 levels — "fine"): use evenly spaced quantiles as approximation
-  // Full exhaustive search over 3 thresholds is O(256^3) = ~16M which may be slow on mobile
-  // Using quantile approach as a fast approximation
-  const cdf = new Float64Array(256);
-  cdf[0] = hist[0];
-  for (let i = 1; i < 256; i++) cdf[i] = cdf[i - 1] + hist[i];
-
-  const thresholds: number[] = [];
-  for (let k = 1; k <= numThresholds; k++) {
-    const target = k / levels;
-    for (let v = 0; v < 256; v++) {
-      if (cdf[v] >= target) {
-        thresholds.push(v);
-        break;
-      }
-    }
-  }
-  return thresholds;
-}
-
 function otsuSingleThreshold(hist: Float64Array): number {
   let sumB = 0;
   let wB = 0;
-  const total = computeMean(hist, 0, 255);
+  // Total weighted mean (equivalent of sum(i * hist[i]) for i=0..255)
+  let total = 0;
+  for (let i = 0; i < 256; i++) total += i * hist[i];
   let maxVar = 0;
   let threshold = 128;
 
@@ -313,18 +294,6 @@ function otsuSingleThreshold(hist: Float64Array): number {
     }
   }
   return threshold;
-}
-
-function computeWeight(hist: Float64Array, from: number, to: number): number {
-  let w = 0;
-  for (let i = from; i <= to; i++) w += hist[i];
-  return w;
-}
-
-function computeMean(hist: Float64Array, from: number, to: number): number {
-  let s = 0;
-  for (let i = from; i <= to; i++) s += i * hist[i];
-  return s;
 }
 
 /**
@@ -566,11 +535,14 @@ function cleanSmallRegions(
  * (white wall, outdoor sky) the background is classified as portrait and the
  * face ends up as background — the preview looks nearly all-dark.
  *
- * Two inversion signals:
+ * Three inversion signals:
  *   1. Border-based: image borders belong to background in ≥95% of portraits.
- *      If >65% of border pixels are portrait (index > 0) the result is inverted.
+ *      If >55% of border pixels are portrait (index > 0) the result is inverted.
  *   2. Coverage-based: if <5% of all pixels are portrait, the threshold missed
  *      the subject entirely.
+ *   3. Center-region: the center 40% of the image should contain the portrait.
+ *      If center pixels are mostly background while borders are mostly portrait,
+ *      the classification is inverted.
  *
  * Inversion: for N levels, level k becomes (N-1-k).
  *   2-level: 0↔1
@@ -590,6 +562,14 @@ function autoCorrectInversion(
   let borderPortrait = 0;
   let borderTotal = 0;
   let totalPortrait = 0;
+  let centerPortrait = 0;
+  let centerTotal = 0;
+
+  // Center region bounds (middle 40%)
+  const cx0 = Math.floor(w * 0.3);
+  const cx1 = Math.ceil(w * 0.7);
+  const cy0 = Math.floor(h * 0.3);
+  const cy1 = Math.ceil(h * 0.7);
 
   for (let i = 0; i < n; i++) {
     const x = i % w;
@@ -597,18 +577,31 @@ function autoCorrectInversion(
     const isBorder =
       x < borderRadius || x >= w - borderRadius ||
       y < borderRadius || y >= h - borderRadius;
+    const isCenter = x >= cx0 && x < cx1 && y >= cy0 && y < cy1;
 
     if (isBorder) {
       borderTotal++;
       if (indices[i] > 0) borderPortrait++;
+    }
+    if (isCenter) {
+      centerTotal++;
+      if (indices[i] > 0) centerPortrait++;
     }
     if (indices[i] > 0) totalPortrait++;
   }
 
   const borderPortraitRatio = borderPortrait / Math.max(1, borderTotal);
   const totalPortraitRatio = totalPortrait / n;
+  const centerPortraitRatio = centerPortrait / Math.max(1, centerTotal);
 
-  const shouldInvert = borderPortraitRatio > 0.65 || totalPortraitRatio < 0.05;
+  // Signal 1: border mostly portrait (lowered from 0.65 to 0.55)
+  // Signal 2: almost no portrait detected at all
+  // Signal 3: center is mostly background while borders are mostly portrait
+  const shouldInvert =
+    borderPortraitRatio > 0.55 ||
+    totalPortraitRatio < 0.02 ||
+    (centerPortraitRatio < 0.3 && borderPortraitRatio > 0.4);
+
   if (!shouldInvert) return;
 
   for (let i = 0; i < n; i++) {
@@ -633,7 +626,7 @@ export function renderStencilPreview(
   canvas.height = rows * CELL_SIZE;
   const ctx = canvas.getContext("2d")!;
 
-  const colorsToUse = STENCIL_RENDER_COLORS.slice(0, Math.max(levels, 2));
+  const colorsToUse = getStencilRenderColors(Math.max(levels, 2));
 
   for (let y = 0; y < rows; y++) {
     for (let x = 0; x < cols; x++) {
@@ -645,4 +638,82 @@ export function renderStencilPreview(
   }
 
   return canvas;
+}
+
+// ─── Upload-based stencil conversion ─────────────────────────────────────────
+
+/**
+ * Convert an uploaded pre-made stencil image (PNG/SVG) into a StencilResult.
+ *
+ * The uploaded image is expected to be a black-and-white (or grayscale) stencil
+ * where dark areas = background and light areas = portrait/reveal.
+ * It is downscaled to the grid dimensions and thresholded into 2 levels.
+ */
+export async function convertUploadedStencil(
+  dataUrl: string,
+  kitSize: ProcessingKitSize,
+): Promise<StencilResult> {
+  const grid = PROCESSING_GRID_CONFIG[kitSize];
+  const cols = grid.cols;
+  const rows = grid.rows;
+
+  const img = await loadImage(dataUrl);
+
+  // Downscale to grid dimensions
+  const imageData = progressiveDownscale(img, cols, rows);
+
+  // Convert to grayscale
+  const n = cols * rows;
+  const indices = new Uint8Array(n);
+
+  // Compute Otsu threshold on grayscale luminance
+  const luminances = new Uint8Array(n);
+  for (let i = 0; i < n; i++) {
+    const si = i * 4;
+    luminances[i] = Math.round(0.299 * imageData.data[si] + 0.587 * imageData.data[si + 1] + 0.114 * imageData.data[si + 2]);
+  }
+
+  const hist = new Float64Array(256);
+  for (let i = 0; i < n; i++) hist[luminances[i]]++;
+  for (let i = 0; i < 256; i++) hist[i] /= n;
+
+  let sumB = 0, wB = 0, total = 0;
+  for (let i = 0; i < 256; i++) total += i * hist[i];
+  let maxVar = 0, threshold = 128;
+  for (let t = 0; t < 256; t++) {
+    wB += hist[t];
+    if (wB === 0) continue;
+    const wF = 1 - wB;
+    if (wF === 0) break;
+    sumB += t * hist[t];
+    const mB = sumB / wB;
+    const mF = (total - sumB) / wF;
+    const v = wB * wF * (mB - mF) ** 2;
+    if (v > maxVar) { maxVar = v; threshold = t; }
+  }
+
+  // Binary classification: bright = portrait (1), dark = background (0)
+  for (let i = 0; i < n; i++) {
+    indices[i] = luminances[i] > threshold ? 1 : 0;
+  }
+
+  // Auto-correct inversion using border analysis
+  autoCorrectInversion(indices, cols, rows, 2);
+
+  // Clean tiny regions
+  cleanSmallRegions(indices, cols, rows, 5, 2);
+
+  // Render preview
+  const canvas = renderStencilPreview(indices, cols, rows, 2);
+
+  return {
+    detailLevel: "medium",
+    indices,
+    gridCols: cols,
+    gridRows: rows,
+    canvas,
+    dataUrl: canvas.toDataURL("image/png"),
+    levels: 2,
+    bridgeCount: 0,
+  };
 }
