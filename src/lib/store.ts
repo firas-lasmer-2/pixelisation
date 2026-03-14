@@ -5,9 +5,9 @@ import { supabase } from "@/integrations/supabase/client";
 import type { KitSize as CatalogKitSize } from "@/lib/kitCatalog";
 import { isCreateOrderPayloadTooLarge, optimizeOrderImageSource } from "@/lib/orderImage";
 
-export type OrderCategory = "classic" | "family" | "kids_dream" | "pet";
+export type OrderCategory = "classic" | "family" | "kids_dream" | "pet" | "superhero" | "couple" | "historical" | "scifi" | "anime";
 export type KitSize = CatalogKitSize;
-export type ArtStyle = "original" | "vintage" | "pop_art" | "watercolor" | "poster";
+export type ArtStyle = "original" | "vintage" | "grayscale";
 export type ProductType = "paint_by_numbers" | "stencil_paint" | "glitter_reveal";
 export type StencilDetailLevel = "bold" | "medium" | "fine";
 export type GlitterPalette = "mercury" | "mars" | "neptune" | "jupiter";
@@ -93,6 +93,7 @@ export interface OrderState {
   dreamJob: string;
   aiGeneratedUrl: string;
   aiGenerationRunId: string;
+  imageAdjustments: { brightness: number; contrast: number };
 }
 
 export function getPhoto(order: OrderState): string {
@@ -124,6 +125,7 @@ const initialState: OrderState = {
   dreamJob: "",
   aiGeneratedUrl: "",
   aiGenerationRunId: "",
+  imageAdjustments: { brightness: 100, contrast: 100 },
 };
 
 interface OrderContextType {
@@ -146,6 +148,7 @@ interface OrderContextType {
   setDedicationText: (dedicationText: string) => void;
   setDreamJob: (job: string) => void;
   setAiGeneratedUrl: (url: string, generationRunId?: string) => void;
+  setImageAdjustments: (adjustments: { brightness: number; contrast: number }) => void;
   confirmOrder: (input: {
     contact: ContactInfo;
     shipping: ShippingInfo;
@@ -212,6 +215,7 @@ export function OrderProvider({ children }: { children: ReactNode }) {
   const setDedicationText = useCallback((dedicationText: string) => setOrder((o) => ({ ...o, dedicationText })), []);
   const setDreamJob = useCallback((dreamJob: string) => setOrder((o) => ({ ...o, dreamJob })), []);
   const setAiGeneratedUrl = useCallback((aiGeneratedUrl: string, aiGenerationRunId = "") => setOrder((o) => ({ ...o, aiGeneratedUrl, aiGenerationRunId })), []);
+  const setImageAdjustments = useCallback((imageAdjustments: { brightness: number; contrast: number }) => setOrder((o) => ({ ...o, imageAdjustments })), []);
   const setStencilDetailLevel = useCallback((stencilDetailLevel: StencilDetailLevel) => setOrder((o) => ({ ...o, stencilDetailLevel })), []);
   const setCustomStencilDataUrl = useCallback((customStencilDataUrl: string) => setOrder((o) => ({ ...o, customStencilDataUrl })), []);
   const setGlitterPalette = useCallback((glitterPalette: GlitterPalette) => setOrder((o) => ({ ...o, glitterPalette })), []);
@@ -263,6 +267,7 @@ export function OrderProvider({ children }: { children: ReactNode }) {
       selectedStyle: snapshot.selectedStyle,
       selectedSize: snapshot.selectedSize,
       croppedArea: snapshot.croppedArea,
+      imageAdjustments: snapshot.imageAdjustments,
       stencilDetailLevel: snapshot.stencilDetailLevel || null,
       glitterPalette: snapshot.glitterPalette || null,
       contact: snapshot.contact,
@@ -321,7 +326,7 @@ export function OrderProvider({ children }: { children: ReactNode }) {
 
   return React.createElement(
     OrderContext.Provider,
-    { value: { order, setCategory, setProductType, setPhoto, removePhoto, setCroppedArea, setStyle, setStylePreviewUrl, setSize, setAddOns, setStencilDetailLevel, setCustomStencilDataUrl, setGlitterPalette, setContact, setShipping, setGift, setDedicationText, setDreamJob, setAiGeneratedUrl, confirmOrder, resetOrder } },
+    { value: { order, setCategory, setProductType, setPhoto, removePhoto, setCroppedArea, setStyle, setStylePreviewUrl, setSize, setAddOns, setStencilDetailLevel, setCustomStencilDataUrl, setGlitterPalette, setContact, setShipping, setGift, setDedicationText, setDreamJob, setAiGeneratedUrl, setImageAdjustments, confirmOrder, resetOrder } },
     children,
   );
 }
@@ -342,6 +347,11 @@ export const CATEGORY_META: Record<OrderCategory, { label: string; description: 
   family: { label: "Famille & Duo", description: "Réunissez 2 photos en une scène unique grâce à l'IA", photosNeeded: 2, icon: "👨‍👩‍👧" },
   kids_dream: { label: "Rêve d'Enfant", description: "Votre enfant dans le métier de ses rêves", photosNeeded: 1, icon: "🚀" },
   pet: { label: "Portrait Royal", description: "Votre animal en portrait royal renaissance", photosNeeded: 1, icon: "👑" },
+  superhero: { label: "Héros Épique", description: "Transformez-vous en héros de film d'action", photosNeeded: 1, icon: "🦸" },
+  couple: { label: "Romance & Couple", description: "Une scène romantique unique rêvée par l'IA", photosNeeded: 2, icon: "💑" },
+  historical: { label: "Époque Vintage", description: "Plongez dans les années 20 ou la Renaissance", photosNeeded: 1, icon: "🎩" },
+  scifi: { label: "Cyberpunk 2077", description: "Votre portrait dans un univers futuriste néon", photosNeeded: 1, icon: "🤖" },
+  anime: { label: "Manga & Anime", description: "Votre photo illustrée façon animation japonaise", photosNeeded: 1, icon: "🌸" },
 };
 
 export const DREAM_JOBS = [

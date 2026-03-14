@@ -21,7 +21,7 @@ vi.mock("@/lib/imageProcessing", async () => {
 });
 
 function createManifest(overrides: Partial<PaintingManifest> = {}): PaintingManifest {
-  const paletteSnapshot = resolvePaletteForProcessing("watercolor", "30x40");
+  const paletteSnapshot = resolvePaletteForProcessing("vintage", "30x40");
 
   return {
     version: 5,
@@ -31,9 +31,9 @@ function createManifest(overrides: Partial<PaintingManifest> = {}): PaintingMani
     productType: "paint_by_numbers",
     kitSize: "stamp_kit_30x40",
     canvasLabel: "30 x 40 cm",
-    artStyle: "watercolor",
-    paletteKey: "watercolor",
-    styleProfileKey: "watercolor",
+    artStyle: "vintage",
+    paletteKey: "vintage",
+    styleProfileKey: "vintage",
     styleProfileVersion: 1,
     paletteSnapshot,
     createdAt: "2026-03-09T00:00:00.000Z",
@@ -73,14 +73,14 @@ describe("paintingManifest", () => {
   });
 
   it("preserves version 4 palette snapshots during normalization", () => {
-    const paletteSnapshot = resolvePaletteForProcessing("watercolor", "30x40");
+    const paletteSnapshot = resolvePaletteForProcessing("vintage", "30x40");
     const manifest = normalizePaintingManifest(createManifest({
       paletteSnapshot,
     }), "ABC123");
 
     expect(manifest?.version).toBe(5);
     expect(resolveManifestPalette(manifest!).colors).toHaveLength(10);
-    expect(manifest?.styleProfileKey).toBe("watercolor");
+    expect(manifest?.styleProfileKey).toBe("vintage");
   });
 
   it("upgrades legacy v3 manifests to version 5 while keeping legacy palettes", () => {
@@ -91,7 +91,7 @@ describe("paintingManifest", () => {
       category: "classic",
       kitSize: "stamp_kit_30x40",
       canvasLabel: "30 x 40 cm",
-      paletteKey: "popart",
+      paletteKey: "vintage",
       createdAt: "2026-03-09T00:00:00.000Z",
       dedicationText: null,
       dedication: null,
@@ -117,8 +117,8 @@ describe("paintingManifest", () => {
     }, "OLD123");
 
     expect(manifest?.version).toBe(5);
-    expect(manifest?.artStyle).toBe("pop_art");
-    expect(manifest?.paletteSnapshot.colors).toHaveLength(resolveLegacyPalette("pop_art").colors.length);
+    expect(manifest?.artStyle).toBe("vintage");
+    expect(manifest?.paletteSnapshot.colors).toHaveLength(resolveLegacyPalette("vintage").colors.length);
     expect(manifest?.stats.colorCount).toBe(8);
   });
 

@@ -2,16 +2,40 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 
-const OPENAI_ENDPOINT = "https://api.openai.com/v1/images/edits";
+const GEMINIGEN_ENDPOINT = "https://api.geminigen.ai/uapi/v1/generate_image";
+const GEMINIGEN_HISTORY_ENDPOINT = "https://api.geminigen.ai/uapi/v1/history";
 const MAX_INPUT_BYTES = 10 * 1024 * 1024;
+const POLL_INTERVAL_MS = 3000;
+const MAX_POLL_ATTEMPTS = 20;
 
 const PROMPTS: Record<string, (params: { dreamJob?: string | null }) => string> = {
   family: () =>
-    "Create a warm, photorealistic portrait from the supplied family imagery. If multiple people are provided, combine them naturally into one emotionally rich paint-by-numbers composition. If only one reference image is supplied, preserve the same scene and produce a polished, print-ready variation.",
+    "High quality photorealistic portrait of the people in the reference photos. If two people are provided, naturally combine them into a single warm, emotionally rich scene. Studio lighting, clean neutral background, sharp facial details, professional photography quality. No text, no watermarks.",
   kids_dream: (params) =>
-    `Create a joyful illustration of the supplied child as a ${params.dreamJob || "superhero"}. Keep the child recognizable, add matching outfit and props, and make the final image vibrant, optimistic, and suitable for a premium paint-by-numbers kit.`,
+    `High quality portrait of the child dressed as a ${params.dreamJob || "superhero"}. Keep the child's face clearly recognizable. Vibrant colors, matching costume and props, natural confident pose. Clean simple background, professional studio lighting, sharp details. No text, no watermarks.`,
   pet: () =>
-    "Transform the supplied pet into a majestic renaissance-style royal portrait. Keep the pet recognizable, add regal clothing and dramatic classical framing, and make the final composition suitable for a premium paint-by-numbers kit.",
+    "Majestic classical oil painting portrait of the pet. Rich dramatic lighting, regal composed pose, deep jewel-tone colors. Dark neutral background with soft vignette. The animal's face and fur textures are rendered in fine detail. No text, no watermarks.",
+  superhero: () =>
+    "Epic cinematic superhero portrait of the person in the photo. Keep facial features recognizable. Dynamic powerful pose, detailed super-suit, dramatic hero lighting with strong contrast. Clean dark or atmospheric background. No text, no logos, no watermarks.",
+  couple: () =>
+    "Beautiful romantic portrait of the couple from the reference photos. Both people look natural and connected together. Warm soft lighting, shallow depth of field with simple clean background. Sharp faces, natural expressions, professional photography quality. No text, no watermarks.",
+  historical: () =>
+    "Classical Renaissance oil painting portrait of the person in the photo. Elegant period-appropriate attire with fine fabric detail, dramatic Rembrandt lighting, deep warm tones. Dark painterly background. Face clearly recognizable with fine detail. No text, no watermarks.",
+  scifi: () =>
+    "Cinematic sci-fi portrait of the person in the photo. Futuristic high-tech outfit, dramatic neon accent lighting against a dark atmospheric background. Face clearly recognizable, sharp detail. Cyberpunk aesthetic with rich contrast and vivid color. No text, no watermarks.",
+  anime: () =>
+    "High quality Japanese anime illustration of the person in the photo. Polished cel-shaded style, vibrant saturated colors, expressive eyes, clean smooth linework. Simple clean gradient background. Face recognizable and detailed. No text, no watermarks.",
+};
+
+const CATEGORY_STYLES: Record<string, string> = {
+  family:     "Portrait",
+  kids_dream: "Illustration",
+  pet:        "Portrait Cinematic",
+  superhero:  "Dynamic",
+  couple:     "Portrait Fashion",
+  historical: "Watercolor",
+  scifi:      "3D Render",
+  anime:      "Anime General",
 };
 
 function json(status: number, body: Record<string, unknown>) {
@@ -25,6 +49,11 @@ function validateCategory(category: string, imageCount: number) {
   if (category === "family" && imageCount >= 1 && imageCount <= 2) return;
   if (category === "kids_dream" && imageCount === 1) return;
   if (category === "pet" && imageCount === 1) return;
+  if (category === "superhero" && imageCount === 1) return;
+  if (category === "couple" && imageCount >= 1 && imageCount <= 2) return;
+  if (category === "historical" && imageCount === 1) return;
+  if (category === "scifi" && imageCount === 1) return;
+  if (category === "anime" && imageCount === 1) return;
   throw new Error("INVALID_INPUT_COMBINATION");
 }
 
@@ -65,6 +94,32 @@ async function sourceToBlob(source: string, index: number) {
   };
 }
 
+async function pollForResult(uuid: string, apiKey: string): Promise<string> {
+  for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+
+    const res = await fetch(`${GEMINIGEN_HISTORY_ENDPOINT}/${uuid}`, {
+      headers: { "x-api-key": apiKey },
+    });
+
+    if (!res.ok) throw new Error(`History poll failed: ${res.status}`);
+
+    const data = await res.json();
+
+    if (data.status === 2) {
+      const url = data.generate_result || data.generated_image?.[0]?.image_url;
+      if (!url) throw new Error("No image URL in completed result");
+      return url;
+    }
+
+    if (data.status === 3) {
+      throw new Error(data.error_message || "AI generation failed");
+    }
+  }
+
+  throw new Error("AI generation timed out");
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -84,8 +139,8 @@ serve(async (req) => {
 
     validateCategory(category, images.length);
 
-    const openAiKey = Deno.env.get("OPENAI_API_KEY");
-    if (!openAiKey) {
+    const geminiGenKey = Deno.env.get("GEMINIGEN_API_KEY");
+    if (!geminiGenKey) {
       return json(500, { error: "AI service not configured" });
     }
 
@@ -100,7 +155,7 @@ serve(async (req) => {
       return json(400, { error: "Invalid category" });
     }
 
-    const model = Deno.env.get("OPENAI_IMAGE_MODEL") || "gpt-image-1";
+    const model = "nano-banana-2";
     supabase = createClient(supabaseUrl, supabaseKey);
 
     const { data: generationRun, error: generationRunError } = await supabase
@@ -110,7 +165,7 @@ serve(async (req) => {
         session_id: sessionId || null,
         category,
         dream_job: dreamJob || null,
-        provider: "openai",
+        provider: "geminigen",
         model,
         requested_by: requestedBy || "studio",
         source_image_urls: serializeSourceImages(images),
@@ -129,19 +184,22 @@ serve(async (req) => {
     }
 
     const formData = new FormData();
-    formData.append("model", model);
     formData.append("prompt", promptFn({ dreamJob }));
-    formData.append("size", "1024x1024");
+    formData.append("model", model);
+    formData.append("aspect_ratio", "1:1");
+    formData.append("style", CATEGORY_STYLES[category] || "Photorealistic");
+    formData.append("output_format", "jpeg");
+    formData.append("resolution", "2K");
 
     for (let i = 0; i < images.length; i++) {
       const prepared = await sourceToBlob(images[i], i);
-      formData.append("image[]", prepared.blob, prepared.fileName);
+      formData.append("files", prepared.blob, prepared.fileName);
     }
 
-    const response = await fetch(OPENAI_ENDPOINT, {
+    const response = await fetch(GEMINIGEN_ENDPOINT, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${openAiKey}`,
+        "x-api-key": geminiGenKey,
       },
       body: formData,
     });
@@ -158,7 +216,7 @@ serve(async (req) => {
       }
 
       const errText = await response.text();
-      console.error("OpenAI image error:", response.status, errText);
+      console.error("GeminiGen image error:", response.status, errText);
       if (generationRunId) {
         await supabase
           .from("ai_generation_runs")
@@ -171,63 +229,38 @@ serve(async (req) => {
     }
 
     const data = await response.json();
-    const generatedImage =
-      data?.data?.[0]?.b64_json ? `data:image/png;base64,${data.data[0].b64_json}` : data?.data?.[0]?.url;
-
-    if (!generatedImage) {
-      return json(500, { error: "No image generated" });
+    const uuid = data.uuid;
+    if (!uuid) {
+      return json(500, { error: "No generation UUID returned" });
     }
 
-    if (!generatedImage.startsWith("data:")) {
-      if (generationRunId) {
-        await supabase
-          .from("ai_generation_runs")
-          .update({
-            result_image_url: generatedImage,
-            error_message: null,
-            metadata: {
-              inputCount,
-              inlineInputCount,
-              deliveredAs: "remote_url",
-            },
-          })
-          .eq("id", generationRunId);
-      }
-
-      return json(200, { imageUrl: generatedImage, generationRunId });
+    // If already completed synchronously, use result directly; otherwise poll
+    let externalImageUrl: string;
+    if (data.status === 2 && data.generate_result) {
+      externalImageUrl = data.generate_result;
+    } else {
+      externalImageUrl = await pollForResult(uuid, geminiGenKey);
     }
 
-    const base64Data = generatedImage.replace(/^data:image\/\w+;base64,/, "");
-    const binaryData = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
-    const fileName = `ai-${category}-${Date.now()}.png`;
+    // Download the image server-side and re-upload to Supabase storage
+    // so the browser can load it without CORS issues (signed R2 URLs block cross-origin)
+    const imgResponse = await fetch(externalImageUrl);
+    if (!imgResponse.ok) throw new Error(`Failed to fetch generated image: ${imgResponse.status}`);
+    const imgBytes = new Uint8Array(await imgResponse.arrayBuffer());
+    const fileName = `ai-${category}-${Date.now()}.jpg`;
 
     const { error: uploadError } = await supabase.storage
       .from("order-photos")
-      .upload(fileName, binaryData, { contentType: "image/png" });
+      .upload(fileName, imgBytes, { contentType: "image/jpeg" });
 
+    let finalImageUrl: string;
     if (uploadError) {
-      console.error("Upload error:", uploadError);
-      if (generationRunId) {
-        await supabase
-          .from("ai_generation_runs")
-          .update({
-            result_image_url: generatedImage,
-            error_message: null,
-            metadata: {
-              inputCount,
-              inlineInputCount,
-              deliveredAs: "data_url",
-              uploadError: uploadError.message,
-            },
-          })
-          .eq("id", generationRunId);
-      }
-
-      return json(200, { imageUrl: generatedImage, generationRunId });
+      console.error("Upload to storage failed, returning external URL:", uploadError);
+      finalImageUrl = externalImageUrl;
+    } else {
+      const { data: urlData } = supabase.storage.from("order-photos").getPublicUrl(fileName);
+      finalImageUrl = urlData.publicUrl;
     }
-
-    const { data: urlData } = supabase.storage.from("order-photos").getPublicUrl(fileName);
-    const finalImageUrl = urlData.publicUrl;
 
     if (generationRunId) {
       await supabase
@@ -238,7 +271,8 @@ serve(async (req) => {
           metadata: {
             inputCount,
             inlineInputCount,
-            deliveredAs: "storage_url",
+            deliveredAs: uploadError ? "external_url" : "storage_url",
+            externalUuid: uuid,
           },
         })
         .eq("id", generationRunId);

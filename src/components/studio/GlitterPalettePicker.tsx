@@ -2,11 +2,11 @@ import { Check } from "lucide-react";
 import type { GlitterPalette } from "@/lib/store";
 import { GLITTER_PALETTE_ORDER, GLITTER_PALETTES } from "@/lib/glitterPalettes";
 
-const CARD_STYLES: Record<GlitterPalette, { gradient: string; borderAccent: string }> = {
-  mercury: { gradient: "from-slate-300/20 to-slate-100/10",  borderAccent: "border-t-slate-400" },
-  mars:    { gradient: "from-red-600/15 to-amber-500/10",    borderAccent: "border-t-red-500" },
-  neptune: { gradient: "from-blue-600/15 to-teal-500/10",    borderAccent: "border-t-blue-500" },
-  jupiter: { gradient: "from-purple-600/15 to-violet-400/10",borderAccent: "border-t-purple-500" },
+const CARD_STYLES: Record<GlitterPalette, { accentColor: string }> = {
+  mercury: { accentColor: "border-slate-400" },
+  mars:    { accentColor: "border-red-500" },
+  neptune: { accentColor: "border-blue-500" },
+  jupiter: { accentColor: "border-purple-500" },
 };
 
 interface GlitterPalettePickerProps {
@@ -26,24 +26,24 @@ export function GlitterPalettePicker({ selected, onSelect }: GlitterPalettePicke
           <div
             key={key}
             onClick={() => onSelect(key)}
-            className={`relative cursor-pointer rounded-xl border-2 border-t-[3px] ${styles.borderAccent} bg-card overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-xl ${
-              isSelected ? "gold-glow scale-[1.02]" : "border-border hover:shadow-lg"
+            className={`relative cursor-pointer rounded-[20px] bg-white overflow-hidden transition-all duration-300 hover:-translate-y-1 shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_30px_-10px_rgba(0,0,0,0.1)] group p-1 ${
+              isSelected ? "ring-2 ring-primary ring-offset-2 scale-[1.02]" : "border border-black/[0.04]"
             }`}
-            style={{ animationDelay: `${idx * 80}ms` }}
+            style={{ animationDelay: `${idx * 40}ms` }}
           >
             {isSelected && (
-              <div className="absolute top-3 left-3 z-10 w-6 h-6 rounded-full bg-primary flex items-center justify-center animate-scale-in">
-                <Check className="h-3.5 w-3.5 text-primary-foreground" />
+              <div className="absolute top-4 left-4 z-10 w-6 h-6 rounded-full bg-primary flex items-center justify-center animate-scale-in shadow-md">
+                <Check className="h-3.5 w-3.5 text-white" />
               </div>
             )}
 
             {/* Color swatch preview */}
-            <div className={`bg-gradient-to-br ${styles.gradient} px-4 pt-5 pb-3`}>
-              <div className="flex gap-2 justify-center mb-3">
+            <div className={`bg-[#FAFAFA] rounded-[16px] px-4 pt-8 pb-6 flex flex-col items-center justify-center transition-colors group-hover:bg-[#F0F0F0]`}>
+              <div className="flex gap-2 justify-center mb-4 transition-transform duration-500 group-hover:scale-110">
                 {palette.colors.map((color) => (
                   <div
                     key={color.name}
-                    className="w-8 h-8 rounded-full shadow-md border-2 border-white/50"
+                    className="w-10 h-10 rounded-full shadow-sm border border-black/10"
                     style={{ backgroundColor: color.hex }}
                     title={color.name}
                   />
@@ -51,7 +51,7 @@ export function GlitterPalettePicker({ selected, onSelect }: GlitterPalettePicke
               </div>
               {/* Shimmer bar */}
               <div
-                className="h-2 rounded-full opacity-60"
+                className="h-1.5 w-full max-w-[120px] rounded-full opacity-60 mt-2"
                 style={{
                   background: `linear-gradient(90deg, ${palette.colors.map((c) => c.hex).join(", ")})`,
                 }}

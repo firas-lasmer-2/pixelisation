@@ -495,6 +495,93 @@ export function renderPixelGrid(
   return canvas;
 }
 
+export function renderOrganicPreview(
+  indices: Uint8Array,
+  palette: PaletteColor[],
+  cols: number,
+  rows: number,
+  scale: number = 5
+): HTMLCanvasElement {
+  // 1. Render mapped indices 1:1
+  const baseCanvas = document.createElement("canvas");
+  baseCanvas.width = cols;
+  baseCanvas.height = rows;
+  const baseCtx = baseCanvas.getContext("2d")!;
+  const baseImg = baseCtx.createImageData(cols, rows);
+  
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const i = (y * cols + x);
+      const px = i * 4;
+      const c = palette[indices[i]];
+      baseImg.data[px] = c.r;
+      baseImg.data[px + 1] = c.g;
+      baseImg.data[px + 2] = c.b;
+      baseImg.data[px + 3] = 255;
+    }
+  }
+  baseCtx.putImageData(baseImg, 0, 0);
+
+  // 2. Draw scaled up into a blurry canvas via bilinear filtering + canvas blur
+  // This physically turns the pixelated edges into soft radiuses, which mathematically 
+  // snaps to vector-like curves when we apply the palette threshold below.
+  const upW = cols * scale;
+  const upH = rows * scale;
+  const upCanvas = document.createElement("canvas");
+  upCanvas.width = upW;
+  upCanvas.height = upH;
+  const upCtx = upCanvas.getContext("2d")!;
+  upCtx.imageSmoothingEnabled = true;
+  upCtx.imageSmoothingQuality = "high";
+  upCtx.filter = `blur(${scale * 0.6}px)`; // Softens the pixel blocks
+  upCtx.drawImage(baseCanvas, 0, 0, upW, upH);
+
+  // 3. Snap the blurry boundary pixels strictly back to the original palette
+  const upImg = upCtx.getImageData(0, 0, upW, upH);
+  const data = upImg.data;
+  
+  // Cache the palette for extreme speed
+  const pLen = palette.length;
+  // A tightly packed array for cache locality
+  const coords = new Int32Array(pLen * 3);
+  for (let p = 0; p < pLen; p++) {
+    coords[p * 3] = palette[p].r;
+    coords[p * 3 + 1] = palette[p].g;
+    coords[p * 3 + 2] = palette[p].b;
+  }
+
+  const dLen = data.length;
+  for (let i = 0; i < dLen; i += 4) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+
+    let minDist = Infinity;
+    let minIdx = 0;
+    
+    // Nearest-neighbor via Euclidean RGB distance
+    for (let p = 0; p < pLen; p++) {
+      const idx = p * 3;
+      const dr = r - coords[idx];
+      const dg = g - coords[idx + 1];
+      const db = b - coords[idx + 2];
+      const dist = (dr * dr) + (dg * dg) + (db * db);
+      if (dist < minDist) {
+        minDist = dist;
+        minIdx = idx;
+      }
+    }
+
+    data[i] = coords[minIdx];
+    data[i + 1] = coords[minIdx + 1];
+    data[i + 2] = coords[minIdx + 2];
+    data[i + 3] = 255;
+  }
+  
+  upCtx.putImageData(upImg, 0, 0);
+  return upCanvas;
+}
+
 export function renderSmoothPreview(
   indices: Uint8Array,
   palette: PaletteColor[],
@@ -657,6 +744,7 @@ export async function processImage(
   imageSrc: string,
   cropData: { x: number; y: number; width: number; height: number },
   kitSize: KitSize = resolveProcessingKitSize(DEFAULT_PUBLIC_KIT),
+  adjustments: { brightness: number; contrast: number } = { brightness: 100, contrast: 100 }
 ): Promise<ProcessingResult[]> {
   const { cols, rows } = GRID_CONFIG[kitSize];
 
@@ -669,6 +757,7 @@ export async function processImage(
         cropCanvas.width = cropData.width;
         cropCanvas.height = cropData.height;
         const cropCtx = cropCanvas.getContext("2d")!;
+        cropCtx.filter = `brightness(${adjustments.brightness}%) contrast(${adjustments.contrast}%)`;
         cropCtx.drawImage(
           img,
           cropData.x,
@@ -680,6 +769,7 @@ export async function processImage(
           cropData.width,
           cropData.height,
         );
+        cropCtx.filter = "none";
 
         const results: ProcessingResult[] = [];
         const cellSize = 16;
@@ -722,6 +812,7 @@ export async function processImage(
             profile.smallRegionMerge.maxAverageEdge,
           );
 
+          const cellSize = 4; // Small cells for fine, crisp mosaic (QBrix-style)
           const canvas = renderPixelGrid(indices, palette.colors, cols, rows, cellSize);
 
           results.push({

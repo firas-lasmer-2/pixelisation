@@ -3,13 +3,12 @@ import { type StencilDetailLevel, STENCIL_DETAIL_META } from "@/lib/store";
 
 const DETAIL_CARDS: {
   key: StencilDetailLevel;
-  gradient: string;
-  borderAccent: string;
+  accentColor: string;
   previewLines: number; // Visual hint for complexity
 }[] = [
-  { key: "bold",   gradient: "from-orange-500/10 to-orange-500/5", borderAccent: "border-t-orange-500", previewLines: 3 },
-  { key: "medium", gradient: "from-primary/10 to-primary/5",       borderAccent: "border-t-primary",    previewLines: 5 },
-  { key: "fine",   gradient: "from-purple-500/10 to-purple-500/5", borderAccent: "border-t-purple-500", previewLines: 8 },
+  { key: "bold",   accentColor: "text-orange-500", previewLines: 3 },
+  { key: "medium", accentColor: "text-primary",    previewLines: 5 },
+  { key: "fine",   accentColor: "text-purple-500", previewLines: 8 },
 ];
 
 /** Simple SVG silhouette complexity preview */
@@ -71,26 +70,28 @@ export function StencilDetailPicker({
           <div
             key={card.key}
             onClick={() => onSelect(card.key)}
-            className={`relative cursor-pointer rounded-xl border-2 border-t-[3px] ${card.borderAccent} bg-card overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-xl ${
-              isSelected ? "gold-glow scale-[1.02]" : "border-border hover:shadow-lg"
+            className={`relative cursor-pointer rounded-[20px] bg-white overflow-hidden transition-all duration-300 hover:-translate-y-1 shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_30px_-10px_rgba(0,0,0,0.1)] group p-1 ${
+              isSelected ? "ring-2 ring-primary ring-offset-2 scale-[1.02]" : "border border-black/[0.04]"
             }`}
-            style={{ animationDelay: `${idx * 80}ms` }}
+            style={{ animationDelay: `${idx * 40}ms` }}
           >
             {isSelected && (
-              <div className="absolute top-3 left-3 z-10 w-6 h-6 rounded-full bg-primary flex items-center justify-center animate-scale-in">
-                <Check className="h-3.5 w-3.5 text-primary-foreground" />
+              <div className="absolute top-4 left-4 z-10 w-6 h-6 rounded-full bg-primary flex items-center justify-center animate-scale-in shadow-md">
+                <Check className="h-3.5 w-3.5 text-white" />
               </div>
             )}
 
-            <div className={`bg-gradient-to-br ${card.gradient} flex items-center justify-center py-4 min-h-[112px]`}>
+            <div className={`bg-[#FAFAFA] rounded-[16px] flex items-center justify-center py-5 min-h-[140px] transition-colors group-hover:bg-[#F0F0F0]`}>
               {previewUrl ? (
                 <img
                   src={previewUrl}
                   alt={meta.label}
-                  className="h-24 object-contain rounded shadow"
+                  className={`h-28 object-contain rounded-xl shadow-sm transition-transform duration-500 ${isSelected ? 'scale-110' : 'group-hover:scale-110'}`}
                 />
               ) : (
-                <SilhouettePreview lines={card.previewLines} />
+                <div className={`transition-transform duration-500 ${isSelected ? 'scale-110' : 'group-hover:scale-110'}`}>
+                  <SilhouettePreview lines={card.previewLines} />
+                </div>
               )}
             </div>
 

@@ -6,12 +6,22 @@ import catClassic from "@/assets/cat-classic.png";
 import catFamily from "@/assets/cat-family.png";
 import catKidsDream from "@/assets/cat-kids-dream.png";
 import catPetRoyal from "@/assets/cat-pet-royal.png";
+import catSuperhero from "@/assets/cat-superhero.png";
+import catCouple from "@/assets/cat-couple.png";
+import catHistorical from "@/assets/cat-historical.png";
+import catScifi from "@/assets/cat-scifi.png";
+import catAnime from "@/assets/cat-anime.png";
 
 export const CATEGORY_IMAGES: Record<OrderCategory, string> = {
   classic: catClassic,
   family: catFamily,
   kids_dream: catKidsDream,
   pet: catPetRoyal,
+  superhero: catSuperhero,
+  couple: catCouple,
+  historical: catHistorical,
+  scifi: catScifi,
+  anime: catAnime,
 };
 
 const CATEGORIES: { key: OrderCategory; gradient: string; hoverBg: string }[] = [
@@ -19,6 +29,11 @@ const CATEGORIES: { key: OrderCategory; gradient: string; hoverBg: string }[] = 
   { key: "family", gradient: "from-accent/20 via-accent/10 to-transparent", hoverBg: "group-hover:bg-accent/5" },
   { key: "kids_dream", gradient: "from-blue-500/20 via-blue-500/10 to-transparent", hoverBg: "group-hover:bg-blue-500/5" },
   { key: "pet", gradient: "from-amber-500/20 via-amber-500/10 to-transparent", hoverBg: "group-hover:bg-amber-500/5" },
+  { key: "superhero", gradient: "from-red-500/20 via-red-500/10 to-transparent", hoverBg: "group-hover:bg-red-500/5" },
+  { key: "couple", gradient: "from-pink-500/20 via-pink-500/10 to-transparent", hoverBg: "group-hover:bg-pink-500/5" },
+  { key: "historical", gradient: "from-amber-700/20 via-amber-700/10 to-transparent", hoverBg: "group-hover:bg-amber-700/5" },
+  { key: "scifi", gradient: "from-cyan-500/20 via-cyan-500/10 to-transparent", hoverBg: "group-hover:bg-cyan-500/5" },
+  { key: "anime", gradient: "from-violet-500/20 via-violet-500/10 to-transparent", hoverBg: "group-hover:bg-violet-500/5" },
 ];
 
 export function CategoryShowcase() {

@@ -101,13 +101,13 @@ function getStepMeta(category: OrderCategory, productType: ProductType = "paint_
     category === "kids_dream" ? "Magie"    :
     "Portrait";
   const uploadLabel = category === "family" ? "Photos" : "Photo";
-  // New flow: Upload → Crop → AI → Style → Confirm
   return [
     { label: "Expérience", icon: Sparkles },
     { label: "Format", icon: Package },
+    { label: "Extras", icon: Gift },
     { label: uploadLabel, icon: Upload },
-    { label: "Recadrage", icon: Camera },
     { label: aiLabel, icon: Wand2 },
+    { label: "Recadrage", icon: Camera },
     styleStep,
     { label: "Commande", icon: CreditCard },
   ];
@@ -126,59 +126,54 @@ function StepIndicator({
   onStepClick: (step: number) => void;
 }) {
   return (
-    <div className="w-full">
-      <div className="flex items-center justify-between mb-2">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground/50">Progression</p>
-        <p className="text-[10px] font-medium text-muted-foreground">Étape {Math.min(currentStep, totalSteps)} sur {totalSteps}</p>
+    <div className="rounded-[26px] border border-border/80 bg-card/85 p-4 shadow-sm">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Parcours studio</p>
+        <p className="text-xs text-muted-foreground">Étape {Math.min(currentStep, totalSteps)} / {totalSteps}</p>
       </div>
 
-      <div className="relative h-1 w-full bg-black/[0.03] rounded-full overflow-hidden flex">
+      <div className={`grid gap-2 sm:grid-cols-4 ${totalSteps <= 7 ? "xl:grid-cols-7" : "xl:grid-cols-8"}`}>
         {stepMeta.map((item, index) => {
           const stepNumber = index + 1;
+          const Icon = item.icon;
           const isActive = stepNumber === currentStep;
           const isCompleted = stepNumber < currentStep;
           const isClickable = stepNumber <= currentStep;
-          
-          let segmentClass = "flex-1 h-full transition-all duration-500 border-r border-white/50 last:border-0 hover:bg-black/10 cursor-pointer ";
-          if (isActive) segmentClass += "bg-primary";
-          else if (isCompleted) segmentClass += "bg-primary/40";
-          else segmentClass += "bg-transparent";
 
           return (
-            <div
+            <button
               key={item.label}
+              type="button"
               onClick={() => isClickable && onStepClick(stepNumber)}
-              className={segmentClass}
-              title={item.label}
-            />
+              disabled={!isClickable}
+              className={`flex items-center gap-3 rounded-2xl border px-3 py-3 text-left transition-all ${
+                isActive
+                  ? "border-primary/40 bg-primary/[0.08] text-foreground gold-glow"
+                  : isCompleted
+                  ? "border-border bg-background/80 text-foreground hover:border-primary/25 hover:bg-primary/[0.04]"
+                  : "border-border/70 bg-background/50 text-muted-foreground opacity-75"
+              }`}
+            >
+              <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border ${
+                isActive
+                  ? "border-primary/30 bg-primary text-primary-foreground"
+                  : isCompleted
+                  ? "border-primary/20 bg-primary/10 text-primary"
+                  : "border-border bg-background text-muted-foreground"
+              }`}>
+                {isCompleted ? <Check className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Étape {stepNumber}</p>
+                <p className="text-sm font-medium">{item.label}</p>
+              </div>
+            </button>
           );
         })}
-      </div>
-      
-      {/* Current step label */}
-      <div className="mt-3 flex items-center justify-between">
-        <span className="text-sm font-medium text-foreground">{stepMeta[currentStep - 1]?.label}</span>
       </div>
     </div>
   );
 }
-
-/* Crops an image to a data URL using canvas */
-const cropImageToDataUrl = (imageUrl: string, crop: Area): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = crop.width;
-      canvas.height = crop.height;
-      const ctx = canvas.getContext("2d")!;
-      ctx.drawImage(img, crop.x, crop.y, crop.width, crop.height, 0, 0, crop.width, crop.height);
-      resolve(canvas.toDataURL("image/jpeg", 0.92));
-    };
-    img.onerror = reject;
-    img.src = imageUrl;
-  });
 
 /* ═══════════════════════════════════════════════════════
    Main Studio Component
@@ -199,7 +194,6 @@ const Studio = () => {
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [submittingOrder, setSubmittingOrder] = useState(false);
 
-  const [croppedPhotoForAI, setCroppedPhotoForAI] = useState("");
   const [contactForm, setContactForm] = useState<ContactInfo>(order.contact);
   const [shippingForm, setShippingForm] = useState<ShippingInfo>(order.shipping);
   const [phoneError, setPhoneError] = useState("");
@@ -502,32 +496,18 @@ const Studio = () => {
     goToStep(5);
   }, [setPhoto]);
 
-  /* Step 4: crop complete → for AI categories: save cropped photo → go to AI step
-                            → for classic: process image → go to style step */
+  /* Step 4: crop complete → process → go to next step */
   const handleCropComplete = useCallback(async (croppedArea: Area) => {
     if (!order.selectedSize) return;
     setCroppedArea(croppedArea);
-
-    if (isAICategory) {
-      // Crop the original photo and hand it off to AI generation
-      const rawPhoto = getPhoto(order);
-      try {
-        const cropped = await cropImageToDataUrl(rawPhoto, croppedArea);
-        setCroppedPhotoForAI(cropped);
-      } catch {
-        setCroppedPhotoForAI(rawPhoto); // fallback to full photo
-      }
-      goToStep(getAIStep());
-      return;
-    }
-
-    // Classic: process image directly after crop
     setProcessing(true);
-    const photo = getPhoto(order);
+
+    const photo = order.aiGeneratedUrl || getPhoto(order);
     const imgKitSize = resolveProcessingKitSize(order.selectedSize);
 
     try {
       if (isStencilProduct) {
+        // Process all 3 detail levels in parallel for stencil products
         const detailLevels: StencilDetailLevel[] = ["bold", "medium", "fine"];
         const results = await Promise.all(
           detailLevels.map((level) => processStencilImage(photo, croppedArea, imgKitSize, level))
@@ -536,7 +516,9 @@ const Studio = () => {
         results.forEach((r) => { previewMap[r.detailLevel] = r.dataUrl; });
         setStencilPreviews(previewMap);
         const activeDetailLevel = order.stencilDetailLevel || "medium";
-        if (!order.stencilDetailLevel) setStencilDetailLevel(activeDetailLevel);
+        if (!order.stencilDetailLevel) {
+          setStencilDetailLevel(activeDetailLevel);
+        }
         setStylePreviewUrl(previewMap[activeDetailLevel] || results[0]?.dataUrl || "");
       } else {
         const results = await processImage(photo, croppedArea, imgKitSize);
@@ -554,14 +536,18 @@ const Studio = () => {
         eventName: "crop_completed",
         category: order.category,
         step: getCropStep(),
-        metadata: { selectedSize: order.selectedSize, fromAi: false, productType: order.productType },
+        metadata: {
+          selectedSize: order.selectedSize,
+          fromAi: Boolean(order.aiGeneratedUrl),
+          productType: order.productType,
+        },
       });
-      goToStep(getStyleStep());
+      goToStep(isAICategory ? 7 : 6);
     } catch (err) {
       console.error("Processing failed:", err);
       setProcessing(false);
     }
-  }, [order.photos, order.selectedSize, order.category, order.productType, order.stencilDetailLevel, isStencilProduct, isAICategory, setCroppedArea, setStencilDetailLevel, setStylePreviewUrl, setCroppedPhotoForAI]);
+  }, [order.photos, order.aiGeneratedUrl, order.selectedSize, order.category, order.productType, order.stencilDetailLevel, isStencilProduct, isAICategory, setCroppedArea, setStencilDetailLevel, setStylePreviewUrl]);
 
   /* Custom stencil upload handler */
   const handleCustomStencilUpload = useCallback(async (file: File) => {
@@ -587,24 +573,19 @@ const Studio = () => {
     }
   }, [order.selectedSize, setCustomStencilDataUrl, setStencilDetailLevel, setStylePreviewUrl]);
 
-  /* AI Generation — uses cropped photo, then auto-processes result */
+  /* AI Generation */
   const handleAIGenerate = async () => {
-    if (!order.selectedSize) return;
     setAiGenerating(true);
     try {
-      // Use the cropped photo as primary input; for multi-photo categories (family/couple)
-      // include the 2nd raw photo as well
-      const primaryImage = croppedPhotoForAI || order.photos[0];
-      const images = order.photos.length > 1
-        ? [primaryImage, order.photos[1]].filter(Boolean)
-        : [primaryImage].filter(Boolean);
-
+      const images = order.photos.filter(Boolean);
       void trackFunnelEvent({
         sessionId,
         eventName: "ai_generation_requested",
         category: order.category,
         step: getAIStep(),
-        metadata: { imageCount: images.length },
+        metadata: {
+          imageCount: images.length,
+        },
       });
 
       const { data, error } = await supabase.functions.invoke("generate-creative", {
@@ -622,58 +603,32 @@ const Studio = () => {
 
       const imageUrl = data.imageUrl;
       setAiGeneratedUrl(imageUrl, data.generationRunId);
-
       void trackFunnelEvent({
         sessionId,
         eventName: "ai_generation_succeeded",
         category: order.category,
         step: getAIStep(),
-        metadata: { generationRunId: data.generationRunId || null },
+        metadata: {
+          generationRunId: data.generationRunId || null,
+        },
       });
-
-      // Auto-process the AI result so style cards are ready.
-      // Use 1024×1024 full-image crop (GeminiGen always returns 1:1 square images).
-      setAiGenerating(false);
-      setProcessing(true);
-      const imgKitSize = resolveProcessingKitSize(order.selectedSize);
-      const fullCrop: Area = { x: 0, y: 0, width: 2048, height: 2048 };
-
-      if (isStencilProduct) {
-        const detailLevels: StencilDetailLevel[] = ["bold", "medium", "fine"];
-        const results = await Promise.all(
-          detailLevels.map((level) => processStencilImage(imageUrl, fullCrop, imgKitSize, level))
-        );
-        const previewMap: Partial<Record<StencilDetailLevel, string>> = {};
-        results.forEach((r) => { previewMap[r.detailLevel] = r.dataUrl; });
-        setStencilPreviews(previewMap);
-        const activeLevel = order.stencilDetailLevel || "medium";
-        if (!order.stencilDetailLevel) setStencilDetailLevel(activeLevel);
-        setStylePreviewUrl(previewMap[activeLevel] || results[0]?.dataUrl || "");
-      } else {
-        const results = await processImage(imageUrl, fullCrop, imgKitSize);
-        const allPreviews: typeof previews = orderStyleResults(results).map((result) => ({
-          style: result.styleKey,
-          results: [result],
-          previewUrl: result.dataUrl,
-        }));
-        setPreviews(allPreviews);
-      }
-
-      setProcessing(false);
-      toast({ title: "Image IA générée ✨", description: "Choisissez votre style artistique." });
-      goToStep(getStyleStep());
+      toast({ title: "Image IA générée ✨", description: "Votre création est prête ! Passez au recadrage." });
+      // AI: 1=Cat, 2=Kit, 3=Upsell, 4=Upload, 5=AI, 6=Crop, 7=Style, 8=Confirm
+      goToStep(6); // Go to crop after AI
     } catch (err: any) {
       console.error("AI generation failed:", err);
-      setAiGenerating(false);
-      setProcessing(false);
       void trackFunnelEvent({
         sessionId,
         eventName: "ai_generation_failed",
         category: order.category,
         step: getAIStep(),
-        metadata: { message: err?.message || "unknown_error" },
+        metadata: {
+          message: err?.message || "unknown_error",
+        },
       });
       toast({ title: "Erreur", description: err.message || "La génération IA a échoué. Réessayez.", variant: "destructive" });
+    } finally {
+      setAiGenerating(false);
     }
   };
 
@@ -778,14 +733,15 @@ const Studio = () => {
     ? "animate-[slide-in-right_0.35s_ease-out]"
     : "animate-[slide-in-left_0.35s_ease-out]";
 
-  // Classic: 1=Cat, 2=Kit, 3=Upload, 4=Crop, 5=Style, 6=Confirm
-  // AI:      1=Cat, 2=Kit, 3=Upload, 4=Crop, 5=AI,    6=Style, 7=Confirm
+  // Classic: 1=Cat, 2=Kit, 3=Upsell, 4=Upload, 5=Crop,  6=Style, 7=Confirm
+  // AI:      1=Cat, 2=Kit, 3=Upsell, 4=Upload, 5=AI,   6=Crop,  7=Style, 8=Confirm
   const getKitStep = () => 2;
-  const getUploadStep = () => 3;
-  const getCropStep = () => 4; // always 4 — crop before AI
-  const getAIStep = () => 5;   // AI only, always after crop
-  const getStyleStep = () => isAICategory ? 6 : 5;
-  const getConfirmStep = () => isAICategory ? 7 : 6;
+  const getUpsellStep = () => 3;
+  const getUploadStep = () => 4;
+  const getAIStep = () => 5; // Only for AI categories
+  const getCropStep = () => isAICategory ? 6 : 5;
+  const getStyleStep = () => isAICategory ? 7 : 6;
+  const getConfirmStep = () => isAICategory ? 8 : 7;
 
   const showHero = !processing && step !== getCropStep() && step !== getAIStep();
 
@@ -815,50 +771,32 @@ const Studio = () => {
     <div className="h-[100dvh] bg-background flex flex-col overflow-hidden">
       <Navbar />
 
-      <div className="flex-1 flex flex-col overflow-hidden studio-bg">
-
-        {/* SINGLE COLUMN PANE: Controls */}
-        <div className="w-full h-full overflow-y-auto overflow-x-hidden scrollbar-hide relative bg-white">
-          
-          {/* Header */}
-          <div className="px-6 py-6 lg:px-12 lg:py-8 sticky top-0 z-20 bg-white/95 backdrop-blur-xl border-b border-black/[0.04]">
-             <div className="flex items-center justify-between mb-6">
-               <div>
-                 <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground mb-1.5">Studio Helma</p>
-                 <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-foreground">{CATEGORY_META[order.category]?.label || "Studio"}</h1>
-               </div>
-               {isAICategory && (
-                  <span className="inline-flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-full bg-blue-50/50 text-blue-600 border border-blue-100/50">
-                    <Sparkles className="h-3.5 w-3.5" /> Intelligence Artificielle
-                  </span>
-               )}
-             </div>
-             {/* Minified step tracker directly embedded here for ultra-clean look */}
-             <div className="flex items-center gap-1.5">
-               {stepMeta.map((item, index) => {
-                 const stepNum = index + 1;
-                 const isActive = stepNum === step;
-                 const isPast = stepNum < step;
-                 const targetClickable = stepNum <= step;
-                 
-                 return (
-                   <div 
-                     key={index} 
-                     onClick={() => targetClickable && goToStep(stepNum)}
-                     className={`h-1.5 rounded-full transition-all duration-300 ${
-                       isActive ? 'w-8 bg-primary' : 
-                       isPast ? 'w-4 bg-primary/30 cursor-pointer hover:bg-primary/50' : 
-                       'w-2 bg-black/5'
-                     }`} 
-                     title={item.label}
-                   />
-                 )
-               })}
-             </div>
+      <div className="flex-1 studio-bg">
+        {/* ─── Hero Banner ─── */}
+        {showHero && (
+          <div className="relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-transparent" />
+            <div className="container mx-auto px-4 pt-10 pb-6 relative">
+              <div className="text-center mb-8">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary mb-3">Studio créatif</p>
+                <h1
+                  className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight mb-3"
+                  style={{ fontFamily: "'Playfair Display', serif" }}
+                >
+                  Créez votre chef-d'œuvre
+                </h1>
+                <p className="text-muted-foreground max-w-md mx-auto text-sm sm:text-base">
+                  {CATEGORY_META[order.category].description}
+                </p>
+              </div>
+              <StepIndicator currentStep={step} totalSteps={totalSteps} stepMeta={stepMeta} onStepClick={(s) => goToStep(s)} />
+            </div>
           </div>
+        )}
 
-          <div className="p-6 lg:p-10 max-w-3xl mx-auto pb-32">
-            <div key={animKey} className={slideClass}>
+        <div className="container mx-auto px-4 py-8">
+          <div className="mx-auto max-w-4xl">
+            <div key={animKey} className={showHero ? slideClass : ""}>
 
               {/* ═══════════════════════════════════════════
                   STEP 1: Choose Category
@@ -1044,12 +982,93 @@ const Studio = () => {
                       <BackIcon className="h-4 w-4" /> Retour
                     </Button>
                     <Button
-                      onClick={() => goToStep(getUploadStep())}
+                      onClick={() => goToStep(3)}
                       disabled={!order.selectedSize}
                       className="gap-2 btn-premium text-primary-foreground border-0 px-8"
                       size="lg"
                     >
                       Continuer <NextIcon className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+              {/* ═══════════════════════════════════════════
+                  STEP 3: Upsell / Extras
+                 ═══════════════════════════════════════════ */}
+              {step === getUpsellStep() && (
+                <div className="space-y-8">
+                  <SectionHeading
+                    title="Complétez votre kit"
+                    subtitle="Optionnel — ajoutez des extras pour une expérience encore plus complète."
+                  />
+
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    {getAvailableAddOns(order.productType).map((addon) => {
+                      const isSelected = order.addOns.includes(addon.id);
+                      return (
+                        <button
+                          key={addon.id}
+                          type="button"
+                          onClick={() => {
+                            const newAddOns = isSelected
+                              ? order.addOns.filter((id) => id !== addon.id)
+                              : [...order.addOns, addon.id];
+                            setAddOns(newAddOns);
+                          }}
+                          className={`group relative rounded-3xl border-2 p-5 text-left transition-all duration-300 hover:shadow-lg ${
+                            isSelected
+                              ? "border-primary bg-primary/[0.03] shadow-lg"
+                              : "border-border/60 bg-card hover:border-primary/30"
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-3 mb-3">
+                            <span className="text-3xl">{addon.icon}</span>
+                            <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
+                              isSelected ? "border-primary bg-primary" : "border-border"
+                            }`}>
+                              {isSelected && <Check className="h-3.5 w-3.5 text-primary-foreground" />}
+                            </div>
+                          </div>
+                          <h3 className="font-semibold text-sm text-foreground mb-1">{addon.label}</h3>
+                          <p className="text-xs text-muted-foreground mb-4">{addon.description}</p>
+                          <div className="flex items-baseline gap-1">
+                            <span className="text-xl font-bold text-primary">+{addon.price}</span>
+                            <span className="text-sm text-muted-foreground">DT</span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {order.addOns.length > 0 && (
+                    <div className="rounded-2xl border border-primary/20 bg-primary/5 px-5 py-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <ShoppingBag className="h-4 w-4 text-primary" />
+                          <span className="text-sm font-semibold text-primary">
+                            {order.addOns.length} extra{order.addOns.length > 1 ? "s" : ""} sélectionné{order.addOns.length > 1 ? "s" : ""}
+                          </span>
+                        </div>
+                        <span className="text-sm font-bold text-primary">
+                          +{ADD_ONS.filter((a) => order.addOns.includes(a.id)).reduce((s, a) => s + a.price, 0)} DT
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between">
+                    <Button variant="outline" onClick={() => goToStep(getKitStep())} className="gap-2">
+                      <BackIcon className="h-4 w-4" /> Retour
+                    </Button>
+                    <Button
+                      onClick={() => goToStep(getUploadStep())}
+                      className="gap-2 btn-premium text-primary-foreground border-0 px-8"
+                      size="lg"
+                    >
+                      {order.addOns.length > 0
+                        ? `Continuer avec ${order.addOns.length} extra${order.addOns.length > 1 ? "s" : ""}`
+                        : "Continuer sans extras"}{" "}
+                      <NextIcon className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>
@@ -1133,7 +1152,7 @@ const Studio = () => {
                     </Button>
                     {order.category !== "classic" && (
                       <Button
-                        onClick={() => goToStep(getCropStep())}
+                        onClick={() => goToStep(getAIStep())}
                         disabled={
                           order.photos.filter(Boolean).length < CATEGORY_META[order.category].photosNeeded ||
                           (order.category === "kids_dream" && !order.dreamJob)
@@ -1149,64 +1168,79 @@ const Studio = () => {
               )}
 
               {/* ═══════════════════════════════════════════
-                  STEP 5 (AI categories): AI Generation
+                  STEP 4 (AI categories): AI Generation
                  ═══════════════════════════════════════════ */}
               {isAICategory && step === getAIStep() && !processing && (
-                <div className="space-y-8">
+                <div>
                   <SectionHeading
-                    title={
-                      order.category === "family"     ? "Fusionner vos photos" :
-                      order.category === "kids_dream" ? "Créer la magie" :
-                      "Créer votre portrait"
+                    title="Magie de l'IA ✨"
+                    subtitle={
+                      order.category === "family"
+                        ? "L'IA va réunir vos deux photos en une scène unique et émouvante."
+                        : order.category === "kids_dream"
+                        ? `L'IA va transformer votre enfant en ${DREAM_JOBS.find(j => j.key === order.dreamJob)?.label || "super-héros"}.`
+                        : "L'IA va transformer votre animal en portrait royal renaissance."
                     }
-                    subtitle="L'IA Helma va transformer votre photo recadrée en une œuvre d'art unique."
                   />
 
-                  {/* Cropped photo preview */}
-                  {croppedPhotoForAI && (
+                  <div className="text-center space-y-6">
+                    {/* Preview of uploaded photos */}
                     <div className="flex justify-center gap-4">
-                      <div className="relative">
-                        <div className="w-36 h-36 rounded-xl overflow-hidden border-2 border-primary/30 shadow-lg">
-                          <img src={croppedPhotoForAI} alt="Photo recadrée" className="w-full h-full object-cover" />
+                      {order.photos.filter(Boolean).map((p, i) => (
+                        <div key={i} className="w-32 h-32 rounded-xl overflow-hidden border-2 border-border shadow-md">
+                          <img src={p} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
                         </div>
-                        <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 text-[10px] font-medium bg-primary text-primary-foreground px-2 py-0.5 rounded-full whitespace-nowrap">Recadrée</span>
-                      </div>
-                      {order.photos[1] && (
-                        <div className="w-36 h-36 rounded-xl overflow-hidden border-2 border-border shadow-md">
-                          <img src={order.photos[1]} alt="Photo 2" className="w-full h-full object-cover" />
-                        </div>
-                      )}
+                      ))}
                     </div>
-                  )}
 
-                  <div className="flex flex-col items-center gap-4">
-                    <Button
-                      onClick={handleAIGenerate}
-                      disabled={aiGenerating}
-                      className="gap-2 btn-premium text-primary-foreground border-0 px-10 h-14 text-base font-semibold shadow-lg"
-                      size="lg"
-                    >
-                      {aiGenerating ? (
-                        <>
-                          <Loader2 className="h-5 w-5 animate-spin" />
-                          Génération en cours...
-                        </>
-                      ) : (
-                        <>
-                          <Wand2 className="h-5 w-5" />
-                          Générer avec l'IA
-                        </>
-                      )}
-                    </Button>
-                    {aiGenerating && (
-                      <p className="text-xs text-muted-foreground animate-pulse">
-                        Cela peut prendre 20-40 secondes...
-                      </p>
+                    {order.aiGeneratedUrl ? (
+                      <div className="space-y-4">
+                        <div className="overflow-hidden rounded-xl border-2 border-primary/30 shadow-xl bg-card p-3 max-w-md mx-auto">
+                          <img src={order.aiGeneratedUrl} alt="AI Generated" className="w-full max-h-80 object-contain rounded-lg" />
+                        </div>
+                        <p className="text-sm font-medium text-primary flex items-center justify-center gap-2">
+                          <CheckCircle className="h-4 w-4" /> Image générée avec succès !
+                        </p>
+                        <div className="flex gap-3 justify-center">
+                          <Button variant="outline" onClick={handleAIGenerate} disabled={aiGenerating} className="gap-2">
+                            <Wand2 className="h-4 w-4" /> Régénérer
+                          </Button>
+                          <Button onClick={() => goToStep(getCropStep())} className="gap-2 btn-premium text-primary-foreground border-0 px-8">
+                            Continuer au recadrage <NextIcon className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        <Button
+                          onClick={handleAIGenerate}
+                          disabled={aiGenerating}
+                          className="gap-2 btn-premium text-primary-foreground border-0 px-10 h-14 text-base font-semibold shadow-lg"
+                          size="lg"
+                        >
+                          {aiGenerating ? (
+                            <>
+                              <Loader2 className="h-5 w-5 animate-spin" />
+                              Génération en cours...
+                            </>
+                          ) : (
+                            <>
+                              <Wand2 className="h-5 w-5" />
+                              Générer avec l'IA
+                            </>
+                          )}
+                        </Button>
+                        {aiGenerating && (
+                          <p className="text-xs text-muted-foreground animate-pulse">
+                            Cela peut prendre 15-30 secondes...
+                          </p>
+                        )}
+                      </div>
                     )}
                   </div>
 
-                  <div className="flex justify-start">
-                    <Button variant="outline" onClick={() => goToStep(getCropStep())} className="gap-2">
+                  <div className="mt-8 flex justify-start">
+                    <Button variant="outline" onClick={() => goToStep(getUploadStep())} className="gap-2">
                       <BackIcon className="h-4 w-4" /> Retour
                     </Button>
                   </div>
@@ -1218,10 +1252,10 @@ const Studio = () => {
                  ═══════════════════════════════════════════ */}
               {step === getCropStep() && !processing && order.selectedSize && (
                 <CropScreen
-                  imageSrc={photo}
+                  imageSrc={photoForProcessing}
                   kitSize={resolveProcessingKitSize(order.selectedSize)}
                   onCropComplete={handleCropComplete}
-                  onBack={() => goToStep(getUploadStep())}
+                  onBack={() => goToStep(isAICategory ? getAIStep() : getUploadStep())}
                 />
               )}
 
@@ -1308,23 +1342,7 @@ const Studio = () => {
                         title={t.studio.step2.title}
                         subtitle={t.studio.step2.subtitle}
                       />
-
-                      {/* Source image preview */}
-                      {(order.aiGeneratedUrl || photo) && (
-                        <div className="mb-8 flex justify-center">
-                          <div className="relative rounded-2xl overflow-hidden shadow-[0_8px_30px_rgba(0,0,0,0.12)] ring-1 ring-border/40 max-h-64 max-w-sm w-full">
-                            <img
-                              src={order.aiGeneratedUrl || photo}
-                              className="w-full max-h-64 object-contain bg-[#F5F5F5]"
-                              alt="Votre photo"
-                            />
-                            <div className="absolute bottom-0 inset-x-0 h-8 bg-gradient-to-t from-black/20 to-transparent" />
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Style cards — 3 columns */}
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                      <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-5">
                         {previews.map((p, i) => {
                           const isSelected = order.selectedStyle === p.style;
                           const styleName = getStyleLabel(t, p.style);
@@ -1349,25 +1367,6 @@ const Studio = () => {
                           );
                         })}
                       </div>
-
-                      {/* Selected style result preview */}
-                      {order.stylePreviewUrl && (
-                        <div className="mt-6 flex justify-center">
-                          <div className="relative rounded-2xl overflow-hidden shadow-[0_8px_30px_rgba(0,0,0,0.12)] ring-2 ring-primary/30 max-h-72 max-w-sm w-full">
-                            <img
-                              src={order.stylePreviewUrl}
-                              className="w-full max-h-72 object-contain bg-[#F5F5F5] animate-fade-in"
-                              alt="Aperçu du style sélectionné"
-                            />
-                            <div className="absolute top-2 left-2">
-                              <span className="inline-flex items-center gap-1 rounded-full bg-primary/90 text-primary-foreground px-2.5 py-1 text-[11px] font-semibold backdrop-blur-sm">
-                                <Check className="h-3 w-3" /> Aperçu
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
                       <div className="mt-8 flex gap-3">
                         <Button variant="outline" onClick={() => goToStep(getCropStep())} className="gap-2">
                           <BackIcon className="h-4 w-4" /> {t.studio.back}
@@ -1641,6 +1640,8 @@ const Studio = () => {
           </div>
         </div>
       </div>
+
+      <Footer />
       <SaveProgressModal open={showSaveModal} onOpenChange={setShowSaveModal} step={step} />
     </div>
   );

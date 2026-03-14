@@ -68,6 +68,18 @@ export const fr = {
       name: "Nuit",
       description: "Une palette tout en bleus, teals et indigo — les carnations deviennent argentées pour un rendu cinématique nocturne.",
     },
+    neon: {
+      name: "Néon",
+      description: "Des couleurs hyper saturées et contrastées pour un rendu cyberpunk audacieux.",
+    },
+    pastel: {
+      name: "Pastel",
+      description: "Des tons doux et lumineux pour un résultat délicat et onirique.",
+    },
+    grayscale: {
+      name: "Grisaille",
+      description: "Des déclinaisons de gris purs pour un rendu monochrome noir et blanc classique.",
+    },
   },
 
   kit: {

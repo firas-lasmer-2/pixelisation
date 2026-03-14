@@ -29,6 +29,10 @@ type CreateOrderPayload = {
     width: number;
     height: number;
   } | null;
+  imageAdjustments?: {
+    brightness: number;
+    contrast: number;
+  } | null;
   productType?: ProductType | null;
   stencilDetailLevel?: StencilDetailLevel | null;
   glitterPalette?: GlitterPalette | null;

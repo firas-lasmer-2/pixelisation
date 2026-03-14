@@ -17,7 +17,7 @@ import { PROCESSING_KIT_META } from "@/lib/kitCatalog";
 interface CropScreenProps {
   imageSrc: string;
   kitSize: KitSize;
-  onCropComplete: (croppedArea: Area) => void;
+  onCropComplete: (croppedArea: Area, adjustments: { brightness: number; contrast: number }) => void;
   onBack: () => void;
   submitLabel?: string;
   freeCrop?: boolean;
@@ -37,6 +37,8 @@ function getQualityInfo(w: number, h: number, kitSize: KitSize) {
 export function CropScreen({ imageSrc, kitSize, onCropComplete, onBack, submitLabel, freeCrop = false, hideKitBadge = false }: CropScreenProps) {
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
+  const [brightness, setBrightness] = useState(100);
+  const [contrast, setContrast] = useState(100);
   const [rotation, setRotation] = useState(0);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
   const [hdPreview, setHdPreview] = useState<string | null>(null);
@@ -73,6 +75,7 @@ export function CropScreen({ imageSrc, kitSize, onCropComplete, onBack, submitLa
           canvas.width = displayW;
           canvas.height = displayH;
           const ctx = canvas.getContext("2d")!;
+          ctx.filter = `brightness(${brightness}%) contrast(${contrast}%)`;
           ctx.imageSmoothingEnabled = true;
           ctx.imageSmoothingQuality = "high";
           ctx.drawImage(img, x, y, width, height, 0, 0, displayW, displayH);
@@ -85,7 +88,7 @@ export function CropScreen({ imageSrc, kitSize, onCropComplete, onBack, submitLa
     return () => {
       if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
     };
-  }, [croppedAreaPixels, imageSrc]);
+  }, [croppedAreaPixels, imageSrc, brightness, contrast]);
 
   const quality = croppedAreaPixels
     ? getQualityInfo(croppedAreaPixels.width, croppedAreaPixels.height, kitSize)
@@ -137,6 +140,7 @@ export function CropScreen({ imageSrc, kitSize, onCropComplete, onBack, submitLa
                 onZoomChange={setZoom}
                 onCropComplete={onCropDone}
               />
+              <style dangerouslySetInnerHTML={{ __html: `.reactEasyCrop_Image { filter: brightness(${brightness}%) contrast(${contrast}%); }` }} />
             </div>
 
             {/* Controls bar */}
@@ -166,6 +170,36 @@ export function CropScreen({ imageSrc, kitSize, onCropComplete, onBack, submitLa
                 >
                   <RotateCw className="h-4 w-4" />
                 </Button>
+              </div>
+              <div className="flex items-center gap-4 mt-4 pt-4 border-t border-border/50">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground min-w-[50px]">
+                  <span>Lumière</span>
+                </div>
+                <Slider
+                  min={50}
+                  max={150}
+                  step={1}
+                  value={[brightness]}
+                  onValueChange={([v]) => setBrightness(v)}
+                  className="flex-1"
+                />
+                <span className="text-xs text-muted-foreground font-mono min-w-[32px] text-right">
+                  {brightness}%
+                </span>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground min-w-[50px] ml-4">
+                  <span>Contraste</span>
+                </div>
+                <Slider
+                  min={50}
+                  max={150}
+                  step={1}
+                  value={[contrast]}
+                  onValueChange={([v]) => setContrast(v)}
+                  className="flex-1"
+                />
+                <span className="text-xs text-muted-foreground font-mono min-w-[32px] text-right">
+                  {contrast}%
+                </span>
               </div>
             </div>
           </CardContent>
@@ -270,7 +304,7 @@ export function CropScreen({ imageSrc, kitSize, onCropComplete, onBack, submitLa
           size="lg"
           className="w-full gap-2 text-base btn-premium h-12"
           onClick={() => {
-            if (croppedAreaPixels) onCropComplete(croppedAreaPixels);
+            if (croppedAreaPixels) onCropComplete(croppedAreaPixels, { brightness, contrast });
           }}
           disabled={!croppedAreaPixels || quality?.level === "low"}
         >

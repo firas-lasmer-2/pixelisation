@@ -337,12 +337,12 @@ export const ALL_KIT_ORDER = [
 ] as const satisfies readonly KitSize[];
 
 export const PROCESSING_GRID_CONFIG: Record<ProcessingKitSize, { cols: number; rows: number }> = {
-  "40x50": { cols: 160, rows: 200 },
-  "30x40": { cols: 120, rows: 160 },
-  "40x60": { cols: 160, rows: 240 },
-  A4: { cols: 84, rows: 119 },
-  A3: { cols: 118, rows: 168 },
-  A2: { cols: 168, rows: 237 },
+  "40x50": { cols: 200, rows: 250 },
+  "30x40": { cols: 150, rows: 200 },
+  "40x60": { cols: 200, rows: 300 },
+  A4: { cols: 105, rows: 149 },
+  A3: { cols: 149, rows: 210 },
+  A2: { cols: 210, rows: 297 },
 };
 
 export const PROCESSING_KIT_META: Record<

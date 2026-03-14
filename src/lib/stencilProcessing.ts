@@ -78,6 +78,7 @@ export async function processStencilImage(
   cropData: { x: number; y: number; width: number; height: number },
   kitSize: ProcessingKitSize,
   detailLevel: StencilDetailLevel,
+  adjustments: { brightness: number; contrast: number } = { brightness: 100, contrast: 100 }
 ): Promise<StencilResult> {
   const cfg = DETAIL_CONFIG[detailLevel];
   const grid = PROCESSING_GRID_CONFIG[kitSize];
@@ -88,7 +89,7 @@ export async function processStencilImage(
   const img = await loadImage(imageSrc);
 
   // 2. Apply crop and draw to an offscreen canvas
-  const cropped = applyCrop(img, cropData);
+  const cropped = applyCrop(img, cropData, adjustments);
 
   // 3. Progressive downscale to grid dimensions
   const imageData = progressiveDownscale(cropped, cols, rows);
@@ -158,16 +159,23 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 function applyCrop(
   img: HTMLImageElement,
   crop: { x: number; y: number; width: number; height: number },
+  adjustments?: { brightness: number; contrast: number }
 ): HTMLCanvasElement {
   const cropCanvas = document.createElement("canvas");
   cropCanvas.width = crop.width;
   cropCanvas.height = crop.height;
   const cropCtx = cropCanvas.getContext("2d")!;
+  if (adjustments) {
+    cropCtx.filter = `brightness(${adjustments.brightness}%) contrast(${adjustments.contrast}%)`;
+  }
   cropCtx.drawImage(
     img,
     crop.x, crop.y, crop.width, crop.height,
     0, 0, crop.width, crop.height,
   );
+  if (adjustments) {
+    cropCtx.filter = "none";
+  }
   return cropCanvas;
 }
 

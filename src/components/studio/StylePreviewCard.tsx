@@ -50,11 +50,11 @@ export function StylePreviewCard({
       <div className="p-4">
         <p className="text-center font-semibold" style={{ fontFamily: "'Playfair Display', serif" }}>{styleName}</p>
         <p className="mt-1 line-clamp-2 text-center text-xs text-muted-foreground">{styleDescription}</p>
-        <div className="mt-3 flex justify-center gap-1.5">
-          {palette.colors.map((color, index) => (
+        <div className="mt-3 flex justify-center gap-1">
+          {palette.colors.slice(0, 10).map((color, index) => (
             <div
               key={`${styleName}-${index}`}
-              className="h-5 w-5 rounded-full border-2 border-background shadow-sm transition-transform hover:scale-125"
+              className="h-4 w-4 rounded-full border-2 border-background shadow-sm"
               style={{ backgroundColor: color.hex }}
               title={color.name}
             />

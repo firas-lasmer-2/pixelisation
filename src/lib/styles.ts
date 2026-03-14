@@ -1,7 +1,7 @@
 import type { Translations } from "@/i18n";
 import type { ArtStyle } from "@/lib/store";
 
-export type StyleTranslationKey = "original" | "vintage" | "popArt" | "watercolor" | "poster";
+export type StyleTranslationKey = "original" | "vintage" | "grayscale";
 
 export interface StyleDefinition {
   key: ArtStyle;
@@ -40,37 +40,14 @@ export const STYLE_DEFINITIONS: Record<ArtStyle, StyleDefinition> = {
       accent: "#8C5020",
     },
   },
-  pop_art: {
-    key: "pop_art",
-    translationKey: "popArt",
+  grayscale: {
+    key: "grayscale",
+    translationKey: "grayscale",
     profileVersion: 5,
     publicVisible: true,
     showcase: {
-      imageUrl: "/images/style-popart.jpg",
-      background: "linear-gradient(145deg, #fff0b3, #ff6f61 38%, #1956df 100%)",
-      accent: "#ec2b8c",
-    },
-  },
-  watercolor: {
-    key: "watercolor",
-    translationKey: "watercolor",
-    profileVersion: 4,
-    publicVisible: true,
-    badgeLabel: "New",
-    showcase: {
-      background: "radial-gradient(circle at 30% 25%, rgba(250,248,245,0.95), rgba(236,160,180,0.9) 30%, rgba(112,128,224,0.82) 62%, rgba(26,36,56,0.9) 100%)",
-      accent: "#ECA0B4",
-    },
-  },
-  poster: {
-    key: "poster",
-    translationKey: "poster",
-    profileVersion: 4,
-    publicVisible: true,
-    badgeLabel: "New",
-    showcase: {
-      background: "linear-gradient(145deg, #F0F4F8, #508898 38%, #1848A0 72%, #080C10 100%)",
-      accent: "#508898",
+      background: "linear-gradient(145deg, #F0F0F0, #9A9A9A 50%, #141414 100%)",
+      accent: "#4A4A4A",
     },
   },
 };
@@ -78,9 +55,7 @@ export const STYLE_DEFINITIONS: Record<ArtStyle, StyleDefinition> = {
 export const PUBLIC_STYLE_ORDER: ArtStyle[] = [
   "original",
   "vintage",
-  "pop_art",
-  "watercolor",
-  "poster",
+  "grayscale",
 ];
 
 export function isArtStyle(value: unknown): value is ArtStyle {
@@ -88,7 +63,6 @@ export function isArtStyle(value: unknown): value is ArtStyle {
 }
 
 export function normalizeArtStyle(value: unknown): ArtStyle {
-  if (value === "popart") return "pop_art";
   if (isArtStyle(value)) return value;
   return "original";
 }
