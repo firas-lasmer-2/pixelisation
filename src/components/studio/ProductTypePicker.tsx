@@ -33,12 +33,17 @@ const PRODUCT_CARDS: {
 interface ProductTypePickerProps {
   selected: ProductType;
   onSelect: (type: ProductType) => void;
+  products?: ProductType[];
 }
 
-export function ProductTypePicker({ selected, onSelect }: ProductTypePickerProps) {
+export function ProductTypePicker({ selected, onSelect, products }: ProductTypePickerProps) {
+  const visibleCards = products
+    ? PRODUCT_CARDS.filter((card) => products.includes(card.key))
+    : PRODUCT_CARDS;
+
   return (
-    <div className="grid gap-4 sm:grid-cols-3">
-      {PRODUCT_CARDS.map((card, idx) => {
+    <div className={`grid gap-4 ${visibleCards.length === 2 ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
+      {visibleCards.map((card, idx) => {
         const meta = PRODUCT_TYPE_META[card.key];
         const isSelected = selected === card.key;
         const Icon = card.Icon;

@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Navbar } from "@/components/shared/Navbar";
 import { Footer } from "@/components/landing/Footer";
 import { useTranslation } from "@/i18n";
-import { useOrder, getPhoto, PRODUCT_TYPE_META, STENCIL_DETAIL_META } from "@/lib/store";
+import { useOrder, getPhoto, isManualArtworkProduct, PRODUCT_TYPE_META, STENCIL_DETAIL_META } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -25,7 +25,7 @@ import {
   isStencilProduct,
   type PaintingManifest,
 } from "@/lib/paintingManifest";
-import { buildViewerUrl, BRAND } from "@/lib/brand";
+import { buildTrackUrl, buildViewerUrl, BRAND } from "@/lib/brand";
 import { GLITTER_PALETTES } from "@/lib/glitterPalettes";
 import { getStyleLabel } from "@/lib/styles";
 import { getKitConfig, resolveProcessingKitSize } from "@/lib/kitCatalog";
@@ -59,20 +59,23 @@ const Download = () => {
   const [error, setError] = useState<string | null>(null);
 
   const dl = t.download;
+  const isManualArtworkOrder = isManualArtworkProduct(order.productType);
   const isPaintByNumbers = order.productType === "paint_by_numbers";
-  const hasRequiredConfiguration = Boolean(
-    getPhoto(order) &&
-    order.selectedSize &&
-    order.croppedArea &&
-    (isPaintByNumbers ? order.selectedStyle : true) &&
-    (order.productType !== "glitter_reveal" || order.glitterPalette)
-  );
+  const hasRequiredConfiguration = isManualArtworkOrder
+    ? Boolean(order.orderRef)
+    : Boolean(
+        getPhoto(order) &&
+        order.selectedSize &&
+        order.croppedArea &&
+        (isPaintByNumbers ? order.selectedStyle : true) &&
+        (order.productType !== "glitter_reveal" || order.glitterPalette)
+      );
 
   useEffect(() => {
     if (!hasRequiredConfiguration) {
-      navigate("/studio");
+      navigate(isManualArtworkOrder ? "/confirmation" : "/studio");
     }
-  }, [hasRequiredConfiguration, navigate]);
+  }, [hasRequiredConfiguration, isManualArtworkOrder, navigate]);
 
   const selectedKit = order.selectedSize ? getKitConfig(order.selectedSize) : null;
   const kitSize = resolveProcessingKitSize(order.selectedSize);
@@ -87,6 +90,52 @@ const Download = () => {
     return order.glitterPalette ? GLITTER_PALETTES[order.glitterPalette].name : PRODUCT_TYPE_META[order.productType].label;
   }, [order.productType, order.selectedStyle, order.stencilDetailLevel, order.glitterPalette, t]);
   const viewerPath = order.instructionCode ? buildViewerUrl(order.instructionCode, window.location.origin).replace(window.location.origin, "") : "";
+
+  if (isManualArtworkOrder) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <Navbar />
+        <div className="flex-1">
+          <div className="container mx-auto px-4 py-16">
+            <div className="mx-auto max-w-2xl">
+              <Card>
+                <CardContent className="space-y-6 p-8 text-center">
+                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <FileText className="h-8 w-8" />
+                  </div>
+                  <div className="space-y-2">
+                    <h1 className="text-2xl font-bold" style={{ fontFamily: "'Playfair Display', serif" }}>
+                      Commande a preparation manuelle
+                    </h1>
+                    <p className="text-sm text-muted-foreground">
+                      Ce produit ne genere ni masques de pochoir, ni design paillettes, ni fichiers SVG, ni instructions telechargeables.
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border bg-muted/30 p-4 text-sm text-muted-foreground">
+                    La photo, le recadrage, le produit, le format et les informations client ont ete enregistres. L'equipe Helma preparera la creation manuellement en dehors de l'application.
+                  </div>
+                  <div className="flex flex-col justify-center gap-3 sm:flex-row">
+                    <Button asChild>
+                      <Link to={buildTrackUrl(order.orderRef, order.instructionCode, window.location.origin).replace(window.location.origin, "")}>
+                        Suivre la commande
+                      </Link>
+                    </Button>
+                    <Button asChild variant="outline">
+                      <Link to="/">
+                        <Home className="mr-2 h-4 w-4" />
+                        Retour a l'accueil
+                      </Link>
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
 
   const sourceForProcessing = order.aiGeneratedUrl || getPhoto(order);
 

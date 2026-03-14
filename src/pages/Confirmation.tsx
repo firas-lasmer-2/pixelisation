@@ -75,6 +75,7 @@ const Confirmation = () => {
   const { order } = useOrder();
   const [copied, setCopied] = useState<string | null>(null);
   const [showConfetti, setShowConfetti] = useState(true);
+  const isManualArtworkOrder = order.productType === "stencil_paint" || order.productType === "glitter_reveal";
 
   useEffect(() => {
     const timer = setTimeout(() => setShowConfetti(false), 3000);
@@ -94,6 +95,7 @@ const Confirmation = () => {
       : order.productType === "stencil_paint"
       ? (order.stencilDetailLevel ? STENCIL_DETAIL_META[order.stencilDetailLevel].label : PRODUCT_TYPE_META[order.productType].label)
       : (order.glitterPalette ? GLITTER_PALETTES[order.glitterPalette].name : PRODUCT_TYPE_META[order.productType].label);
+    const labelName = order.productType === "paint_by_numbers" ? "Style" : "Produit";
     const trackUrl = buildTrackUrl(order.orderRef, order.instructionCode, window.location.origin);
     const msg = [
       `🎨 Ma commande ${BRAND.name} est confirmée !`,
@@ -101,7 +103,7 @@ const Confirmation = () => {
       `📦 Réf : ${order.orderRef}`,
       `🔑 Code kit : ${order.instructionCode}`,
       `📐 Format : ${sizeLabel}`,
-      `🖌️ Style : ${styleLabel}`,
+      `🖌️ ${labelName} : ${styleLabel}`,
       ``,
       `Suivre ma commande : ${trackUrl}`,
     ].join("\n");
@@ -260,12 +262,14 @@ const Confirmation = () => {
             )}
 
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <Button asChild className="rounded-full">
-                <Link to="/download">
-                  <FileText className="me-2 h-4 w-4" />
-                  {t.download.downloadBtn}
-                </Link>
-              </Button>
+              {!isManualArtworkOrder && (
+                <Button asChild className="rounded-full">
+                  <Link to="/download">
+                    <FileText className="me-2 h-4 w-4" />
+                    {t.download.downloadBtn}
+                  </Link>
+                </Button>
+              )}
               <Button asChild variant="outline" className="rounded-full">
                 <Link to={buildTrackUrl(order.orderRef, order.instructionCode, window.location.origin).replace(window.location.origin, "")}>
                   <Truck className="me-2 h-4 w-4" />

@@ -116,7 +116,13 @@ export function ProductShowcase() {
                   </div>
 
                   <Button
-                    onClick={() => navigate(`/studio?product=${card.key}`)}
+                    onClick={() =>
+                      navigate(
+                        card.key === "paint_by_numbers"
+                          ? `/studio?product=${card.key}`
+                          : `/studio/manual?product=${card.key}`
+                      )
+                    }
                     variant="outline"
                     className="w-full gap-2 group-hover:bg-primary group-hover:text-primary-foreground group-hover:border-primary transition-colors"
                     size="sm"

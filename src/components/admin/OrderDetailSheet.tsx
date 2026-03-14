@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { getKitDisplayLabel } from "@/lib/kitCatalog";
-import { CheckCircle, Package, Truck, MapPin, User, Mail, Phone, MapPinned, Loader2, History, ImageIcon } from "lucide-react";
+import { CheckCircle, Package, Truck, MapPin, User, Mail, Phone, MapPinned, Loader2, History, ImageIcon, Download } from "lucide-react";
 import type { Database } from "@/integrations/supabase/types";
 
 type Order = Database["public"]["Tables"]["orders"]["Row"];
@@ -28,6 +28,12 @@ const ASSET_LABELS: Record<string, string> = {
   ai_result: "AI Result",
   order_main: "Main",
   regenerated: "Regenerated",
+};
+
+const PRODUCT_TYPE_LABELS: Record<string, string> = {
+  paint_by_numbers: "Paint by Numbers",
+  stencil_paint: "Stencil Paint",
+  glitter_reveal: "Glitter Reveal",
 };
 
 interface OrderDetailSheetProps {
@@ -89,6 +95,11 @@ export function OrderDetailSheet({ order, open, onOpenChange, onStatusUpdated }:
 
   const config = STATUS_CONFIG[status];
   const StatusIcon = config.icon;
+  const productType = order.product_type || "paint_by_numbers";
+  const cropData =
+    order.crop_data && typeof order.crop_data === "object" && !Array.isArray(order.crop_data)
+      ? (order.crop_data as Record<string, unknown>)
+      : null;
 
   const handleSaveOperations = async () => {
     setSaving(true);
@@ -126,6 +137,7 @@ export function OrderDetailSheet({ order, open, onOpenChange, onStatusUpdated }:
           artStyle: order.art_style,
           totalPrice: order.total_price,
           category: order.category || "classic",
+          productType,
           trackingNumber: trackingNumber || null,
           courierName: courierName || null,
           fulfillmentNote: fulfillmentNote || null,
@@ -223,7 +235,23 @@ export function OrderDetailSheet({ order, open, onOpenChange, onStatusUpdated }:
 
           {order.photo_url && (
             <div className="space-y-2">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Current Main Photo</p>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Current Main Photo</p>
+                <div className="flex gap-2">
+                  <Button asChild variant="outline" size="sm" className="gap-2">
+                    <a href={order.photo_url} target="_blank" rel="noreferrer">
+                      <ImageIcon className="h-3.5 w-3.5" />
+                      Open
+                    </a>
+                  </Button>
+                  <Button asChild variant="outline" size="sm" className="gap-2">
+                    <a href={order.photo_url} download>
+                      <Download className="h-3.5 w-3.5" />
+                      Download
+                    </a>
+                  </Button>
+                </div>
+              </div>
               <img src={order.photo_url} alt="Order" className="rounded-lg border border-border w-full max-h-56 object-contain bg-muted" />
             </div>
           )}
@@ -232,10 +260,16 @@ export function OrderDetailSheet({ order, open, onOpenChange, onStatusUpdated }:
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Kit Details</p>
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div><span className="text-muted-foreground">Size:</span> <span className="font-medium">{getKitDisplayLabel(order.kit_size)}</span></div>
-              <div><span className="text-muted-foreground">Style:</span> <span className="font-medium">{order.art_style}</span></div>
+              <div><span className="text-muted-foreground">Product:</span> <span className="font-medium">{PRODUCT_TYPE_LABELS[productType] || productType}</span></div>
+              <div><span className="text-muted-foreground">Style:</span> <span className="font-medium">{order.art_style || "Manual artwork"}</span></div>
               <div><span className="text-muted-foreground">Price:</span> <span className="font-medium">{order.total_price} DT</span></div>
               <div><span className="text-muted-foreground">Gift:</span> <span className="font-medium">{order.is_gift ? "Yes" : "No"}</span></div>
             </div>
+            {cropData && (
+              <p className="text-xs text-muted-foreground rounded border bg-muted/40 p-2">
+                Crop: x {String(cropData.x ?? "—")}, y {String(cropData.y ?? "—")}, w {String(cropData.width ?? "—")}, h {String(cropData.height ?? "—")}
+              </p>
+            )}
             {order.dedication_text && (
               <p className="text-xs text-muted-foreground bg-primary/5 border border-primary/15 p-2 rounded">
                 Dedication: <span className="font-medium text-foreground">{order.dedication_text}</span>

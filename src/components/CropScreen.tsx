@@ -19,6 +19,9 @@ interface CropScreenProps {
   kitSize: KitSize;
   onCropComplete: (croppedArea: Area) => void;
   onBack: () => void;
+  submitLabel?: string;
+  freeCrop?: boolean;
+  hideKitBadge?: boolean;
 }
 
 function getQualityInfo(w: number, h: number, kitSize: KitSize) {
@@ -31,7 +34,7 @@ function getQualityInfo(w: number, h: number, kitSize: KitSize) {
   return { level: "low" as const, label: "Qualité insuffisante", percent: 25, color: "text-destructive", bgColor: "bg-destructive" };
 }
 
-export function CropScreen({ imageSrc, kitSize, onCropComplete, onBack }: CropScreenProps) {
+export function CropScreen({ imageSrc, kitSize, onCropComplete, onBack, submitLabel, freeCrop = false, hideKitBadge = false }: CropScreenProps) {
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
@@ -42,7 +45,7 @@ export function CropScreen({ imageSrc, kitSize, onCropComplete, onBack }: CropSc
   const { t } = useTranslation();
 
   const kitMeta = PROCESSING_KIT_META[kitSize];
-  const aspect = kitMeta.aspectRatio;
+  const aspect = freeCrop ? undefined : kitMeta.aspectRatio;
   const gridConfig = GRID_CONFIG[kitSize];
 
   const onCropDone = useCallback((_: Area, croppedPixels: Area) => {
@@ -101,9 +104,11 @@ export function CropScreen({ imageSrc, kitSize, onCropComplete, onBack }: CropSc
           >
             <ArrowLeft className="w-4 h-4" /> {t.studio.back}
           </button>
-          <Badge variant="secondary" className="text-xs font-medium">
-            {kitMeta.label} — {gridConfig.cols}×{gridConfig.rows} blocs
-          </Badge>
+          {!hideKitBadge && (
+            <Badge variant="secondary" className="text-xs font-medium">
+              {kitMeta.label} — {gridConfig.cols}×{gridConfig.rows} blocs
+            </Badge>
+          )}
         </div>
 
         <div className="flex items-center gap-2.5">
@@ -269,8 +274,8 @@ export function CropScreen({ imageSrc, kitSize, onCropComplete, onBack }: CropSc
           }}
           disabled={!croppedAreaPixels || quality?.level === "low"}
         >
-          <Sparkles className="w-5 h-5" />
-          {cropT.generate || "Générer l'aperçu"}
+          {submitLabel ? <CheckCircle2 className="w-5 h-5" /> : <Sparkles className="w-5 h-5" />}
+          {submitLabel || cropT.generate || "Générer l'aperçu"}
         </Button>
       </div>
     </div>

@@ -47,6 +47,7 @@ serve(async (req) => {
         selectedStyle: cart.art_style,
         stencilDetailLevel: (cart as Record<string, unknown>).stencil_detail_level || null,
         glitterPalette: (cart as Record<string, unknown>).glitter_palette || null,
+        cropData: (cart as Record<string, unknown>).crop_data || null,
         dedicationText: cart.dedication_text,
         dreamJob: cart.dream_job,
         stepReached: cart.step_reached,

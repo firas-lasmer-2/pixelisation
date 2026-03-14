@@ -7,6 +7,7 @@ import { I18nProvider } from "@/i18n";
 import { OrderProvider } from "@/lib/store";
 import Landing from "./pages/Landing";
 import Studio from "./pages/Studio";
+import ManualArtworkStudio from "./pages/ManualArtworkStudio";
 import Confirmation from "./pages/Confirmation";
 import Download from "./pages/Download";
 import Track from "./pages/Track";
@@ -42,6 +43,7 @@ const App = () => (
             <Routes>
               <Route path="/" element={<Landing />} />
               <Route path="/studio" element={<Studio />} />
+              <Route path="/studio/manual" element={<ManualArtworkStudio />} />
               <Route path="/confirmation" element={<Confirmation />} />
               <Route path="/download" element={<Download />} />
               <Route path="/track" element={<Track />} />

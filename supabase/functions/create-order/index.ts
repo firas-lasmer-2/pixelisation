@@ -23,6 +23,12 @@ type CreateOrderPayload = {
   generationRunId?: string;
   selectedStyle?: string | null;
   selectedSize: string;
+  croppedArea?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null;
   productType?: ProductType | null;
   stencilDetailLevel?: StencilDetailLevel | null;
   glitterPalette?: GlitterPalette | null;
@@ -69,6 +75,30 @@ function sanitizeDedicationText(value: string | null | undefined) {
     .slice(0, 22);
 
   return normalized || null;
+}
+
+function sanitizeCropArea(value: CreateOrderPayload["croppedArea"]) {
+  if (!value) return null;
+
+  const x = Number(value.x);
+  const y = Number(value.y);
+  const width = Number(value.width);
+  const height = Number(value.height);
+
+  if (![x, y, width, height].every((entry) => Number.isFinite(entry))) {
+    return null;
+  }
+
+  if (width <= 0 || height <= 0) {
+    return null;
+  }
+
+  return {
+    x: Math.round(x),
+    y: Math.round(y),
+    width: Math.round(width),
+    height: Math.round(height),
+  };
 }
 
 function createOrderRef() {
@@ -195,6 +225,11 @@ serve(async (req) => {
       return json(400, { error: "Missing selected size" });
     }
 
+    const croppedArea = sanitizeCropArea(payload.croppedArea);
+    if (!croppedArea) {
+      return json(400, { error: "Missing crop data" });
+    }
+
     if (productType === "paint_by_numbers" && !payload.selectedStyle) {
       return json(400, { error: "Missing selected style for paint by numbers" });
     }
@@ -269,6 +304,7 @@ serve(async (req) => {
     if (dedicationText) {
       orderUpdates.dedication_text = dedicationText;
     }
+    orderUpdates.crop_data = croppedArea;
     // Always persist product type fields (defaults to paint_by_numbers)
     orderUpdates.product_type = productType;
     if (payload.stencilDetailLevel) {

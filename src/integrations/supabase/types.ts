@@ -22,18 +22,22 @@ export type Database = {
           contact_first_name: string | null
           contact_phone: string | null
           created_at: string
+          crop_data: Json | null
           dedication_text: string | null
           dream_job: string | null
+          glitter_palette: string | null
           id: string
           kit_size: string | null
           last_recovery_sent_at: string | null
           last_recovery_status: string | null
           photo_uploaded: boolean
+          product_type: string | null
           recovered_order_ref: string | null
           recovery_attempts: number
           recovery_channel: string | null
           recovered: boolean
           session_id: string
+          stencil_detail_level: string | null
           step_reached: number
           updated_at: string
         }
@@ -44,18 +48,22 @@ export type Database = {
           contact_first_name?: string | null
           contact_phone?: string | null
           created_at?: string
+          crop_data?: Json | null
           dedication_text?: string | null
           dream_job?: string | null
+          glitter_palette?: string | null
           id?: string
           kit_size?: string | null
           last_recovery_sent_at?: string | null
           last_recovery_status?: string | null
           photo_uploaded?: boolean
+          product_type?: string | null
           recovered_order_ref?: string | null
           recovery_attempts?: number
           recovery_channel?: string | null
           recovered?: boolean
           session_id: string
+          stencil_detail_level?: string | null
           step_reached?: number
           updated_at?: string
         }
@@ -66,18 +74,22 @@ export type Database = {
           contact_first_name?: string | null
           contact_phone?: string | null
           created_at?: string
+          crop_data?: Json | null
           dedication_text?: string | null
           dream_job?: string | null
+          glitter_palette?: string | null
           id?: string
           kit_size?: string | null
           last_recovery_sent_at?: string | null
           last_recovery_status?: string | null
           photo_uploaded?: boolean
+          product_type?: string | null
           recovered_order_ref?: string | null
           recovery_attempts?: number
           recovery_channel?: string | null
           recovered?: boolean
           session_id?: string
+          stencil_detail_level?: string | null
           step_reached?: number
           updated_at?: string
         }
@@ -213,7 +225,7 @@ export type Database = {
       }
       orders: {
         Row: {
-          art_style: string
+          art_style: string | null
           category: string
           contact_email: string
           contact_first_name: string
@@ -222,6 +234,7 @@ export type Database = {
           courier_name: string | null
           coupon_code: string | null
           created_at: string
+          crop_data: Json | null
           cropped_preview_url: string | null
           dedication_text: string | null
           delivered_at: string | null
@@ -229,24 +242,27 @@ export type Database = {
           dream_job: string | null
           fulfillment_note: string | null
           gift_message: string | null
+          glitter_palette: string | null
           id: string
           instruction_code: string
           is_gift: boolean
           kit_size: string
           order_ref: string
           photo_url: string | null
+          product_type: string
           shipped_at: string | null
           shipping_address: string
           shipping_city: string
           shipping_governorate: string
           shipping_postal_code: string | null
+          stencil_detail_level: string | null
           status: Database["public"]["Enums"]["order_status"]
           total_price: number
           tracking_number: string | null
           updated_at: string
         }
         Insert: {
-          art_style: string
+          art_style?: string | null
           category?: string
           contact_email: string
           contact_first_name: string
@@ -255,6 +271,7 @@ export type Database = {
           courier_name?: string | null
           coupon_code?: string | null
           created_at?: string
+          crop_data?: Json | null
           cropped_preview_url?: string | null
           dedication_text?: string | null
           delivered_at?: string | null
@@ -262,24 +279,27 @@ export type Database = {
           dream_job?: string | null
           fulfillment_note?: string | null
           gift_message?: string | null
+          glitter_palette?: string | null
           id?: string
           instruction_code: string
           is_gift?: boolean
           kit_size: string
           order_ref: string
           photo_url?: string | null
+          product_type?: string
           shipped_at?: string | null
           shipping_address: string
           shipping_city: string
           shipping_governorate: string
           shipping_postal_code?: string | null
+          stencil_detail_level?: string | null
           status?: Database["public"]["Enums"]["order_status"]
           total_price: number
           tracking_number?: string | null
           updated_at?: string
         }
         Update: {
-          art_style?: string
+          art_style?: string | null
           category?: string
           contact_email?: string
           contact_first_name?: string
@@ -288,6 +308,7 @@ export type Database = {
           courier_name?: string | null
           coupon_code?: string | null
           created_at?: string
+          crop_data?: Json | null
           cropped_preview_url?: string | null
           dedication_text?: string | null
           delivered_at?: string | null
@@ -295,17 +316,20 @@ export type Database = {
           dream_job?: string | null
           fulfillment_note?: string | null
           gift_message?: string | null
+          glitter_palette?: string | null
           id?: string
           instruction_code?: string
           is_gift?: boolean
           kit_size?: string
           order_ref?: string
           photo_url?: string | null
+          product_type?: string
           shipped_at?: string | null
           shipping_address?: string
           shipping_city?: string
           shipping_governorate?: string
           shipping_postal_code?: string | null
+          stencil_detail_level?: string | null
           status?: Database["public"]["Enums"]["order_status"]
           total_price?: number
           tracking_number?: string | null

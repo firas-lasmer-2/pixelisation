@@ -4,7 +4,7 @@ import { Area } from "react-easy-crop";
 import { Navbar } from "@/components/shared/Navbar";
 import { Footer } from "@/components/landing/Footer";
 import { useTranslation } from "@/i18n";
-import { useOrder, getPhoto, PRICING, TUNISIAN_GOVERNORATES, CATEGORY_META, DREAM_JOBS, ADD_ONS, getAvailableAddOns, STENCIL_DETAIL_META, type KitSize, type ArtStyle, type ContactInfo, type ShippingInfo, type OrderCategory, type ProductType, type StencilDetailLevel, type GlitterPalette } from "@/lib/store";
+import { useOrder, getPhoto, isManualArtworkProduct, PRICING, TUNISIAN_GOVERNORATES, CATEGORY_META, DREAM_JOBS, ADD_ONS, getAvailableAddOns, STENCIL_DETAIL_META, type KitSize, type ArtStyle, type ContactInfo, type ShippingInfo, type OrderCategory, type ProductType, type StencilDetailLevel, type GlitterPalette } from "@/lib/store";
 import {
   DEFAULT_PUBLIC_KIT,
   KIT_TONE_STYLES,
@@ -220,6 +220,10 @@ const Studio = () => {
     if (resumeSessionId) return;
     const cat = searchParams.get("category");
     const product = searchParams.get("product");
+    if (product && (product === "stencil_paint" || product === "glitter_reveal")) {
+      navigate(`/studio/manual?product=${product}`, { replace: true });
+      return;
+    }
     if (cat && ["classic", "family", "kids_dream", "pet"].includes(cat)) {
       setCategory(cat as OrderCategory);
       setStep(2); // Skip category selection
@@ -227,7 +231,7 @@ const Studio = () => {
     if (product && ["paint_by_numbers", "stencil_paint", "glitter_reveal"].includes(product)) {
       setProductType(product as ProductType);
     }
-  }, [resumeSessionId, searchParams, setCategory, setProductType]);
+  }, [navigate, resumeSessionId, searchParams, setCategory, setProductType]);
 
   // Compute step meta based on category and product type
   const stepMeta = getStepMeta(order.category, order.productType);
@@ -288,6 +292,11 @@ const Studio = () => {
       const cart = data?.cart;
       if (!cart) {
         setRecoveringCart(false);
+        return;
+      }
+
+      if (cart.productType && isManualArtworkProduct(cart.productType as ProductType)) {
+        navigate(`/studio/manual?resume=${encodeURIComponent(resumeSessionId)}`, { replace: true });
         return;
       }
 
@@ -364,7 +373,7 @@ const Studio = () => {
     return () => {
       active = false;
     };
-  }, [resumeSessionId, sessionId, setCategory, setProductType, setStencilDetailLevel, setGlitterPalette, setContact, setDreamJob, setSize]);
+  }, [navigate, resumeSessionId, sessionId, setCategory, setProductType, setStencilDetailLevel, setGlitterPalette, setContact, setDreamJob, setSize]);
 
   useEffect(() => {
     const photo = getPhoto(order);
@@ -684,6 +693,7 @@ const Studio = () => {
         message === "Invalid JSON body" ? "Les photos envoyées sont invalides. Réessayez avec des images plus légères." :
         message === "Missing valid contact details" ? "Vérifiez votre prénom, nom et numéro de téléphone." :
         message === "Missing shipping details" ? "Ajoutez l'adresse, la ville et le gouvernorat de livraison." :
+        message === "Missing crop data" || message === "Order is missing crop" ? "Recadrez votre photo avant de confirmer." :
         message === "ORDER_INVALID_SIZE" || message === "Missing selected size" || message === "Order is missing size" ? "Choisissez une taille avant de confirmer." :
         message === "ORDER_INVALID_STYLE" || message === "Missing selected style for paint by numbers" || message === "Order is missing style" || message === "Missing selected size or style" ? "Choisissez un style avant de confirmer." :
         message;
@@ -811,7 +821,13 @@ const Studio = () => {
 
                   <div className="flex justify-end">
                     <Button
-                      onClick={() => goToStep(2)}
+                      onClick={() => {
+                        if (isManualArtworkProduct(order.productType)) {
+                          navigate(`/studio/manual?product=${order.productType}`);
+                          return;
+                        }
+                        goToStep(2);
+                      }}
                       className="gap-2 btn-premium text-primary-foreground border-0 px-8"
                       size="lg"
                     >
