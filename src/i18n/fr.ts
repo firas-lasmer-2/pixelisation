@@ -53,8 +53,8 @@ export const fr = {
       description: "Une palette naturelle et équilibrée pour préserver les carnations, les vêtements et les ombres avec plus de fidélité.",
     },
     vintage: {
-      name: "Vintage",
-      description: "Des teintes chaudes, patinées et élégantes pour un rendu nostalgique plus riche.",
+      name: "Sépia",
+      description: "Un duotone chaud et monochrome, du vélin à l'espresso — rendu photo ancienne, intemporel.",
     },
     popArt: {
       name: "Pop Art",
@@ -65,8 +65,8 @@ export const fr = {
       description: "Des lavis doux et lumineux, avec des contours plus souples et une ambiance délicate.",
     },
     poster: {
-      name: "Poster",
-      description: "Des formes plus franches, des contrastes nets et une lecture très claire du portrait.",
+      name: "Nuit",
+      description: "Une palette tout en bleus, teals et indigo — les carnations deviennent argentées pour un rendu cinématique nocturne.",
     },
   },
 
@@ -398,7 +398,7 @@ export const fr = {
     subtitle: "Découvrez les créations de nos clients — des portraits uniques et personnalisés",
     filterAll: "Tous",
     filterOriginal: "Original",
-    filterVintage: "Vintage",
+    filterVintage: "Sépia",
     filterPopArt: "Pop Art",
     cta: "Créez votre propre portrait",
     size: "Taille",

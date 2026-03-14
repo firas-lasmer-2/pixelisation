@@ -32,18 +32,18 @@ export const STYLE_DEFINITIONS: Record<ArtStyle, StyleDefinition> = {
   vintage: {
     key: "vintage",
     translationKey: "vintage",
-    profileVersion: 3,
+    profileVersion: 5,
     publicVisible: true,
     showcase: {
       imageUrl: "/images/style-vintage.jpg",
-      background: "linear-gradient(145deg, #f3e7d3, #c98d54 42%, #4d2e22 100%)",
-      accent: "#c89552",
+      background: "linear-gradient(145deg, #FAF0E0, #D4A660 40%, #501808 100%)",
+      accent: "#8C5020",
     },
   },
   pop_art: {
     key: "pop_art",
     translationKey: "popArt",
-    profileVersion: 3,
+    profileVersion: 5,
     publicVisible: true,
     showcase: {
       imageUrl: "/images/style-popart.jpg",
@@ -54,23 +54,23 @@ export const STYLE_DEFINITIONS: Record<ArtStyle, StyleDefinition> = {
   watercolor: {
     key: "watercolor",
     translationKey: "watercolor",
-    profileVersion: 2,
+    profileVersion: 4,
     publicVisible: true,
     badgeLabel: "New",
     showcase: {
-      background: "radial-gradient(circle at 20% 20%, rgba(250,245,235,0.95), rgba(232,197,194,0.92) 24%, rgba(157,179,216,0.85) 58%, rgba(58,70,84,0.9) 100%)",
-      accent: "#9db3d8",
+      background: "radial-gradient(circle at 30% 25%, rgba(250,248,245,0.95), rgba(236,160,180,0.9) 30%, rgba(112,128,224,0.82) 62%, rgba(26,36,56,0.9) 100%)",
+      accent: "#ECA0B4",
     },
   },
   poster: {
     key: "poster",
     translationKey: "poster",
-    profileVersion: 2,
+    profileVersion: 4,
     publicVisible: true,
     badgeLabel: "New",
     showcase: {
-      background: "linear-gradient(135deg, #f6f1e7 0%, #d9c5a4 24%, #d8563a 46%, #4574b6 74%, #1a1c20 100%)",
-      accent: "#4574b6",
+      background: "linear-gradient(145deg, #F0F4F8, #508898 38%, #1848A0 72%, #080C10 100%)",
+      accent: "#508898",
     },
   },
 };
