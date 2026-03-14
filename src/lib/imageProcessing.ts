@@ -244,6 +244,79 @@ function directQuantize(imageData: ImageData, palette: PaletteColor[]): Uint8Arr
   return indices;
 }
 
+function ditherQuantize(
+  imageData: ImageData,
+  palette: PaletteColor[],
+  edgeMap: Float32Array,
+  strength: number,
+): Uint8Array {
+  const w = imageData.width;
+  const h = imageData.height;
+  const indices = new Uint8Array(w * h);
+
+  // Float copy of pixel data so quantization error can accumulate without clamping
+  const pixels = new Float32Array(w * h * 3);
+  for (let i = 0; i < w * h; i++) {
+    const si = i * 4;
+    pixels[i * 3] = imageData.data[si];
+    pixels[i * 3 + 1] = imageData.data[si + 1];
+    pixels[i * 3 + 2] = imageData.data[si + 2];
+  }
+
+  for (let y = 0; y < h; y++) {
+    // Serpentine scanning: alternate direction each row to prevent diagonal streaks
+    const leftToRight = y % 2 === 0;
+    const xStart = leftToRight ? 0 : w - 1;
+    const xEnd = leftToRight ? w : -1;
+    const xStep = leftToRight ? 1 : -1;
+
+    for (let x = xStart; x !== xEnd; x += xStep) {
+      const i = y * w + x;
+      const pi = i * 3;
+
+      const oldR = pixels[pi];
+      const oldG = pixels[pi + 1];
+      const oldB = pixels[pi + 2];
+
+      const nearestIdx = findNearestColor(
+        Math.round(Math.max(0, Math.min(255, oldR))),
+        Math.round(Math.max(0, Math.min(255, oldG))),
+        Math.round(Math.max(0, Math.min(255, oldB))),
+        palette,
+      );
+      indices[i] = nearestIdx;
+
+      const chosen = palette[nearestIdx];
+      const errR = oldR - chosen.r;
+      const errG = oldG - chosen.g;
+      const errB = oldB - chosen.b;
+
+      // Edge-aware: reduce diffusion near edges for clean boundaries
+      const edgeVal = edgeMap[i] || 0;
+      const effectiveStrength = strength * Math.max(0, 1.0 - edgeVal * 3.0);
+
+      if (effectiveStrength > 0) {
+        const distribute = (nx: number, ny: number, weight: number) => {
+          if (nx < 0 || nx >= w || ny < 0 || ny >= h) return;
+          const ni = (ny * w + nx) * 3;
+          const w_eff = weight * effectiveStrength;
+          pixels[ni] += errR * w_eff;
+          pixels[ni + 1] += errG * w_eff;
+          pixels[ni + 2] += errB * w_eff;
+        };
+
+        // Floyd-Steinberg weights (serpentine-aware)
+        distribute(x + xStep, y, 7 / 16);
+        distribute(x - xStep, y + 1, 3 / 16);
+        distribute(x, y + 1, 5 / 16);
+        distribute(x + xStep, y + 1, 1 / 16);
+      }
+    }
+  }
+
+  return indices;
+}
+
 function edgeContourCleanup(
   indices: Uint8Array,
   w: number,
@@ -772,7 +845,6 @@ export async function processImage(
         cropCtx.filter = "none";
 
         const results: ProcessingResult[] = [];
-        const cellSize = 16;
 
         for (const styleKey of PUBLIC_STYLE_ORDER) {
           const profile = getStyleProcessingProfile(styleKey);
@@ -799,7 +871,9 @@ export async function processImage(
 
           const downscaled = areaAverageDownscale(hiRes, cols, rows);
           const edgeMap = computeEdgeMap(downscaled.data, cols, rows);
-          const indices = directQuantize(downscaled, palette.colors);
+          const indices = profile.ditherStrength > 0
+            ? ditherQuantize(downscaled, palette.colors, edgeMap, profile.ditherStrength)
+            : directQuantize(downscaled, palette.colors);
 
           edgeContourCleanup(indices, cols, rows, edgeMap, palette.colors.length);
           adaptiveDenoise(indices, cols, rows, edgeMap, palette.colors.length, profile.denoiseConfig);
@@ -812,8 +886,7 @@ export async function processImage(
             profile.smallRegionMerge.maxAverageEdge,
           );
 
-          const cellSize = 4; // Small cells for fine, crisp mosaic (QBrix-style)
-          const canvas = renderPixelGrid(indices, palette.colors, cols, rows, cellSize);
+          const canvas = renderOrganicPreview(indices, palette.colors, cols, rows, 4);
 
           results.push({
             styleKey,

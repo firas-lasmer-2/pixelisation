@@ -20,7 +20,7 @@ export const STYLE_DEFINITIONS: Record<ArtStyle, StyleDefinition> = {
   original: {
     key: "original",
     translationKey: "original",
-    profileVersion: 3,
+    profileVersion: 4,
     publicVisible: true,
     badgeLabel: "Popular",
     showcase: {
@@ -32,7 +32,7 @@ export const STYLE_DEFINITIONS: Record<ArtStyle, StyleDefinition> = {
   vintage: {
     key: "vintage",
     translationKey: "vintage",
-    profileVersion: 5,
+    profileVersion: 6,
     publicVisible: true,
     showcase: {
       imageUrl: "/images/style-vintage.jpg",
@@ -43,7 +43,7 @@ export const STYLE_DEFINITIONS: Record<ArtStyle, StyleDefinition> = {
   grayscale: {
     key: "grayscale",
     translationKey: "grayscale",
-    profileVersion: 5,
+    profileVersion: 6,
     publicVisible: true,
     showcase: {
       background: "linear-gradient(145deg, #F0F0F0, #9A9A9A 50%, #141414 100%)",
