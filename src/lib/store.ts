@@ -30,25 +30,81 @@ export function getAvailableAddOns(productType: ProductType) {
   return ADD_ONS.filter((a) => (a.productTypes as readonly string[]).includes(productType));
 }
 
-export const PRODUCT_TYPE_META: Record<ProductType, { label: string; description: string; shortDescription: string; icon: string }> = {
+export const PRODUCT_TYPE_META: Record<ProductType, { label: string; description: string; shortDescription: string; icon: string; features: string[] }> = {
   paint_by_numbers: {
     label: "Peinture par Numéros",
     description: "Kit classique avec toile numérotée et peintures acryliques",
     shortDescription: "Le classique Helma",
     icon: "🎨",
+    features: ["9 catégories", "3 styles", "Génération IA", "PDF + Viewer"],
   },
   stencil_paint: {
     label: "Stencil Paint Reveal",
     description: "Peignez librement sur le pochoir, pelez pour révéler votre portrait en blanc",
     shortDescription: "Peignez, pelez, révélez !",
     icon: "🖌️",
+    features: ["3 niveaux de détail", "Préparation artisanale", "Expérience révélable"],
   },
   glitter_reveal: {
     label: "Glitter Reveal",
     description: "Saupoudrez de paillettes, pelez le pochoir, révélez votre portrait scintillant",
     shortDescription: "Paillettes, pochoir, magie !",
     icon: "✨",
+    features: ["4 palettes exclusives", "Préparation artisanale", "Expérience scintillante"],
   },
+};
+
+export const CATEGORY_THEMES: Partial<Record<OrderCategory, { key: string; label: string; icon: string }[]>> = {
+  superhero: [
+    { key: "generic",        label: "Héros Épique",        icon: "⚡" },
+    { key: "superman",       label: "Superman",             icon: "🦸" },
+    { key: "batman",         label: "Batman",               icon: "🦇" },
+    { key: "spider-man",     label: "Spider-Man",           icon: "🕷️" },
+    { key: "wonder-woman",   label: "Wonder Woman",         icon: "👑" },
+    { key: "iron-man",       label: "Iron Man",             icon: "🤖" },
+    { key: "captain",        label: "Captain America",      icon: "🛡️" },
+    { key: "thor",           label: "Thor",                 icon: "🔨" },
+    { key: "black-panther",  label: "Black Panther",        icon: "🐾" },
+  ],
+  couple: [
+    { key: "romantic",  label: "Romantique",        icon: "💕" },
+    { key: "paris",     label: "Paris",              icon: "🗼" },
+    { key: "beach",     label: "Plage tropicale",    icon: "🏖️" },
+    { key: "forest",    label: "Forêt enchantée",    icon: "🌲" },
+    { key: "cafe",      label: "Café vintage",       icon: "☕" },
+    { key: "tuscany",   label: "Toscane",            icon: "🌅" },
+  ],
+  historical: [
+    { key: "renaissance",  label: "Renaissance",       icon: "🎨" },
+    { key: "victorian",    label: "Ère Victorienne",   icon: "🎩" },
+    { key: "egypt",        label: "Égypte Antique",    icon: "🏺" },
+    { key: "belle-epoque", label: "Belle Époque",      icon: "🌹" },
+    { key: "rome",         label: "Rome Antique",      icon: "🏛️" },
+  ],
+  scifi: [
+    { key: "cyberpunk", label: "Cyberpunk",           icon: "🌆" },
+    { key: "space",     label: "Explorateur Spatial", icon: "🚀" },
+    { key: "dystopia",  label: "Post-Apocalyptique",  icon: "☢️" },
+    { key: "starwars",  label: "Jedi / Sith",         icon: "⚔️" },
+  ],
+  anime: [
+    { key: "anime-general", label: "Anime Classique", icon: "🎌" },
+    { key: "ghibli",        label: "Studio Ghibli",   icon: "🌿" },
+    { key: "action",        label: "Shonen Action",   icon: "💥" },
+    { key: "romance",       label: "Shojo Romance",   icon: "🌸" },
+    { key: "chibi",         label: "Chibi Kawaii",    icon: "🐱" },
+  ],
+  pet: [
+    { key: "royal",      label: "Portrait Royal",       icon: "👑" },
+    { key: "watercolor", label: "Aquarelle Douce",       icon: "🎨" },
+    { key: "fantasy",    label: "Chevalier Fantastique", icon: "⚔️" },
+    { key: "modern",     label: "Art Moderne",           icon: "🖼️" },
+  ],
+  family: [
+    { key: "warm-studio", label: "Studio Chaleureux", icon: "✨" },
+    { key: "outdoor",     label: "En Plein Air",      icon: "🌤️" },
+    { key: "formal",      label: "Portrait Élégant",  icon: "🎭" },
+  ],
 };
 
 export const STENCIL_DETAIL_META: Record<StencilDetailLevel, { label: string; description: string }> = {
@@ -91,6 +147,7 @@ export interface OrderState {
   giftMessage: string;
   dedicationText: string; // Deprecated – always empty, kept for backward compat
   dreamJob: string;
+  categoryTheme: string;
   aiGeneratedUrl: string;
   aiGenerationRunId: string;
   imageAdjustments: { brightness: number; contrast: number };
@@ -123,6 +180,7 @@ const initialState: OrderState = {
   giftMessage: "",
   dedicationText: "",
   dreamJob: "",
+  categoryTheme: "generic",
   aiGeneratedUrl: "",
   aiGenerationRunId: "",
   imageAdjustments: { brightness: 100, contrast: 100 },
@@ -147,6 +205,7 @@ interface OrderContextType {
   setGift: (isGift: boolean, message: string) => void;
   setDedicationText: (dedicationText: string) => void;
   setDreamJob: (job: string) => void;
+  setCategoryTheme: (theme: string) => void;
   setAiGeneratedUrl: (url: string, generationRunId?: string) => void;
   setImageAdjustments: (adjustments: { brightness: number; contrast: number }) => void;
   confirmOrder: (input: {
@@ -214,6 +273,7 @@ export function OrderProvider({ children }: { children: ReactNode }) {
   const setGift = useCallback((isGift: boolean, giftMessage: string) => setOrder((o) => ({ ...o, isGift, giftMessage })), []);
   const setDedicationText = useCallback((dedicationText: string) => setOrder((o) => ({ ...o, dedicationText })), []);
   const setDreamJob = useCallback((dreamJob: string) => setOrder((o) => ({ ...o, dreamJob })), []);
+  const setCategoryTheme = useCallback((categoryTheme: string) => setOrder((o) => ({ ...o, categoryTheme })), []);
   const setAiGeneratedUrl = useCallback((aiGeneratedUrl: string, aiGenerationRunId = "") => setOrder((o) => ({ ...o, aiGeneratedUrl, aiGenerationRunId })), []);
   const setImageAdjustments = useCallback((imageAdjustments: { brightness: number; contrast: number }) => setOrder((o) => ({ ...o, imageAdjustments })), []);
   const setStencilDetailLevel = useCallback((stencilDetailLevel: StencilDetailLevel) => setOrder((o) => ({ ...o, stencilDetailLevel })), []);
@@ -326,7 +386,7 @@ export function OrderProvider({ children }: { children: ReactNode }) {
 
   return React.createElement(
     OrderContext.Provider,
-    { value: { order, setCategory, setProductType, setPhoto, removePhoto, setCroppedArea, setStyle, setStylePreviewUrl, setSize, setAddOns, setStencilDetailLevel, setCustomStencilDataUrl, setGlitterPalette, setContact, setShipping, setGift, setDedicationText, setDreamJob, setAiGeneratedUrl, setImageAdjustments, confirmOrder, resetOrder } },
+    { value: { order, setCategory, setProductType, setPhoto, removePhoto, setCroppedArea, setStyle, setStylePreviewUrl, setSize, setAddOns, setStencilDetailLevel, setCustomStencilDataUrl, setGlitterPalette, setContact, setShipping, setGift, setDedicationText, setDreamJob, setCategoryTheme, setAiGeneratedUrl, setImageAdjustments, confirmOrder, resetOrder } },
     children,
   );
 }

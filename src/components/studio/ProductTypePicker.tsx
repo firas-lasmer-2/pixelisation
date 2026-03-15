@@ -48,14 +48,14 @@ export function ProductTypePicker({ selected, onSelect, products }: ProductTypeP
           <div
             key={card.key}
             onClick={() => onSelect(card.key)}
-            className={`relative cursor-pointer rounded-[20px] bg-white overflow-hidden transition-all duration-300 hover:-translate-y-1 shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_30px_-10px_rgba(0,0,0,0.1)] group p-1 ${
-              isSelected ? "ring-2 ring-primary ring-offset-2 scale-[1.02]" : "border border-black/[0.04]"
+            className={`relative cursor-pointer rounded-[32px] bg-white overflow-hidden transition-all duration-400 ease-out hover:-translate-y-1 group p-2 ${
+              isSelected ? "ring-1 ring-primary/20 shadow-[0_8px_30px_-10px_rgba(0,0,0,0.1)] bg-primary/[0.02]" : "border border-black/[0.04] bg-[#FAFAFA] hover:shadow-[0_8px_30px_-10px_rgba(0,0,0,0.05)] hover:bg-white"
             }`}
             style={{ animationDelay: `${idx * 40}ms` }}
           >
             {isSelected && (
-              <div className="absolute top-4 left-4 z-10 w-6 h-6 rounded-full bg-primary flex items-center justify-center animate-scale-in shadow-md">
-                <Check className="h-3.5 w-3.5 text-white" />
+              <div className="absolute top-4 left-4 z-10 w-7 h-7 rounded-full bg-primary flex items-center justify-center animate-scale-in shadow-sm">
+                <Check className="h-4 w-4 text-white" />
               </div>
             )}
 
@@ -67,9 +67,9 @@ export function ProductTypePicker({ selected, onSelect, products }: ProductTypeP
               </div>
             )}
 
-            <div className={`bg-[#FAFAFA] rounded-[16px] flex items-center justify-center py-8 transition-colors group-hover:bg-[#F0F0F0]`}>
-              <div className={`w-16 h-16 rounded-full bg-white flex items-center justify-center shadow-sm transition-transform duration-500 ${isSelected ? 'scale-110' : 'group-hover:scale-110'}`}>
-                <Icon className={`h-8 w-8 ${card.accentColor}`} />
+            <div className={`bg-transparent rounded-[24px] flex items-center justify-center py-10 transition-colors`}>
+              <div className={`w-20 h-20 rounded-full bg-white flex items-center justify-center shadow-sm border border-black/[0.03] transition-transform duration-500 ease-out ${isSelected ? 'scale-110 shadow-md ring-4 ring-primary/5' : 'group-hover:scale-110 group-hover:shadow-md'}`}>
+                <Icon className={`h-10 w-10 ${card.accentColor}`} />
               </div>
             </div>
 

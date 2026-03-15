@@ -3,6 +3,7 @@ import { getShowcasePalette } from "@/lib/palettes";
 import { getPublicStyles } from "@/lib/styles";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
 import { Sparkles } from "lucide-react";
+import { ProductContextBadge } from "@/components/shared/ProductContextBadge";
 
 export function StyleShowcase() {
   const { t } = useTranslation();
@@ -15,9 +16,7 @@ export function StyleShowcase() {
 
       <div className="container mx-auto px-4">
         <div ref={sectionRef} className="scroll-reveal mx-auto mb-20 max-w-3xl text-center">
-          <span className="mb-4 inline-block text-sm font-semibold uppercase tracking-[0.2em] text-primary">
-            {t.styles.sectionTitle}
-          </span>
+          <ProductContextBadge />
           <h2 className="mb-6 text-4xl font-bold md:text-5xl">{t.styles.sectionTitle}</h2>
           <p className="text-lg text-muted-foreground">{t.styles.sectionSubtitle}</p>
         </div>

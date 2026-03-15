@@ -2,16 +2,16 @@ import { type OrderCategory, CATEGORY_META } from "@/lib/store";
 import { Check, Sparkles } from "lucide-react";
 import { CATEGORY_IMAGES } from "@/components/landing/CategoryShowcase";
 
-const CATEGORY_CARDS: { key: OrderCategory; accentColor: string }[] = [
-  { key: "classic", accentColor: "text-primary" },
-  { key: "family", accentColor: "text-accent" },
-  { key: "kids_dream", accentColor: "text-blue-500" },
-  { key: "pet", accentColor: "text-amber-500" },
-  { key: "superhero", accentColor: "text-red-500" },
-  { key: "couple", accentColor: "text-pink-500" },
-  { key: "historical", accentColor: "text-amber-700" },
-  { key: "scifi", accentColor: "text-cyan-500" },
-  { key: "anime", accentColor: "text-violet-500" },
+const CATEGORY_CARDS: { key: OrderCategory; accentBg: string; accentText: string }[] = [
+  { key: "classic",    accentBg: "bg-amber-50",   accentText: "text-amber-700" },
+  { key: "family",     accentBg: "bg-rose-50",     accentText: "text-rose-600" },
+  { key: "kids_dream", accentBg: "bg-blue-50",     accentText: "text-blue-600" },
+  { key: "pet",        accentBg: "bg-amber-50",    accentText: "text-amber-600" },
+  { key: "superhero",  accentBg: "bg-red-50",      accentText: "text-red-600" },
+  { key: "couple",     accentBg: "bg-pink-50",     accentText: "text-pink-600" },
+  { key: "historical", accentBg: "bg-yellow-50",   accentText: "text-yellow-700" },
+  { key: "scifi",      accentBg: "bg-cyan-50",     accentText: "text-cyan-600" },
+  { key: "anime",      accentBg: "bg-violet-50",   accentText: "text-violet-600" },
 ];
 
 interface CategorySelectorProps {
@@ -21,58 +21,59 @@ interface CategorySelectorProps {
 
 export function CategorySelector({ selected, onSelect }: CategorySelectorProps) {
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      {CATEGORY_CARDS.map((card, idx) => {
+    <div className="flex flex-col gap-2">
+      {CATEGORY_CARDS.map((card) => {
         const meta = CATEGORY_META[card.key];
         const isSelected = selected === card.key;
         const isAI = card.key !== "classic";
 
         return (
-          <div
+          <button
             key={card.key}
+            type="button"
             onClick={() => onSelect(card.key)}
-            className={`relative cursor-pointer rounded-[20px] bg-white overflow-hidden transition-all duration-300 hover:-translate-y-1 shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_30px_-10px_rgba(0,0,0,0.1)] group p-1 ${
-              isSelected ? "ring-2 ring-primary ring-offset-2 scale-[1.02]" : "border border-black/[0.04]"
+            className={`group relative flex items-center gap-4 w-full rounded-2xl border px-4 py-3 text-left transition-all duration-200 ${
+              isSelected
+                ? "border-primary/30 bg-primary/[0.03] shadow-[0_4px_20px_-8px_rgba(0,0,0,0.08)]"
+                : "border-black/[0.05] bg-white hover:border-black/10 hover:shadow-[0_4px_16px_-6px_rgba(0,0,0,0.06)]"
             }`}
-            style={{ animationDelay: `${idx * 40}ms` }}
           >
-            {isSelected && (
-              <div className="absolute top-4 left-4 z-10 w-6 h-6 rounded-full bg-primary flex items-center justify-center animate-scale-in shadow-md">
-                <Check className="h-3.5 w-3.5 text-white" />
-              </div>
-            )}
-
-            {isAI && (
-              <div className="absolute top-4 right-4 z-10">
-                <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-black/5 text-foreground/70 backdrop-blur-md">
-                  <Sparkles className="h-2.5 w-2.5" /> IA
-                </span>
-              </div>
-            )}
-
-            <div className={`bg-[#FAFAFA] rounded-[16px] flex items-center justify-center py-5 transition-colors group-hover:bg-[#F0F0F0]`}>
+            {/* Category image */}
+            <div className={`shrink-0 w-14 h-14 rounded-xl flex items-center justify-center ${card.accentBg} transition-transform duration-300 ${isSelected ? "scale-105" : "group-hover:scale-105"}`}>
               <img
                 src={CATEGORY_IMAGES[card.key]}
                 alt={meta.label}
-                className={`h-28 w-28 object-contain drop-shadow-sm transition-transform duration-500 ${isSelected ? 'scale-110' : 'group-hover:scale-110'}`}
+                className="h-10 w-10 object-contain"
               />
             </div>
 
-            <div className="p-4">
-              <h3
-                className="text-base font-bold mb-1"
-                style={{ fontFamily: "'Playfair Display', serif" }}
-              >
-                {meta.label}
-              </h3>
-              <p className="text-xs text-muted-foreground leading-relaxed">
+            {/* Text */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-0.5">
+                <span className="text-sm font-bold text-foreground" style={{ fontFamily: "'Playfair Display', serif" }}>
+                  {meta.label}
+                </span>
+                {isAI && (
+                  <span className={`inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${card.accentBg} ${card.accentText}`}>
+                    <Sparkles className="h-2.5 w-2.5" /> IA
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground/80 leading-snug line-clamp-1">
                 {meta.description}
               </p>
-              <div className="mt-2 text-[10px] font-medium text-muted-foreground/70">
+              <p className="text-[10px] text-muted-foreground/50 mt-0.5 font-medium">
                 {meta.photosNeeded === 2 ? "2 photos requises" : "1 photo requise"}
-              </div>
+              </p>
             </div>
-          </div>
+
+            {/* Selection indicator */}
+            <div className={`shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all duration-200 ${
+              isSelected ? "border-primary bg-primary scale-110" : "border-black/15 bg-white"
+            }`}>
+              {isSelected && <Check className="h-3.5 w-3.5 text-white" strokeWidth={3} />}
+            </div>
+          </button>
         );
       })}
     </div>

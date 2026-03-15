@@ -1,6 +1,12 @@
 import { useTranslation } from "@/i18n";
-import { Upload, Palette, ShoppingBag, Package, ArrowRight } from "lucide-react";
+import { Upload, Palette, ShoppingBag, Package, ArrowRight, Paintbrush, Sparkles } from "lucide-react";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 
 const icons = [Upload, Palette, ShoppingBag, Package];
 const stepImages = [
@@ -38,6 +44,53 @@ export function HowItWorks() {
               <StepRow key={i} step={step} index={i} Icon={Icon} image={stepImages[i]} isEven={isEven} isLast={i === t.howItWorks.steps.length - 1} />
             );
           })}
+
+          {/* Other product types */}
+          <div className="mt-16 mx-auto max-w-2xl">
+            <Accordion type="single" collapsible className="space-y-3">
+              <AccordionItem value="stencil" className="rounded-xl border-2 border-border bg-card px-6 transition-all data-[state=open]:border-blue-200 data-[state=open]:shadow-md">
+                <AccordionTrigger className="text-start text-base font-semibold hover:no-underline py-5">
+                  <span className="flex items-center gap-2">
+                    <Paintbrush className="h-4 w-4 text-blue-600" />
+                    {t.howItWorks.stencilTitle}
+                  </span>
+                </AccordionTrigger>
+                <AccordionContent className="pb-5">
+                  <div className="space-y-3">
+                    {t.howItWorks.stencilSteps.map((s, i) => (
+                      <div key={i} className="flex items-center gap-3 text-sm text-muted-foreground">
+                        <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs shrink-0">
+                          {i + 1}
+                        </span>
+                        {s}
+                      </div>
+                    ))}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+
+              <AccordionItem value="glitter" className="rounded-xl border-2 border-border bg-card px-6 transition-all data-[state=open]:border-purple-200 data-[state=open]:shadow-md">
+                <AccordionTrigger className="text-start text-base font-semibold hover:no-underline py-5">
+                  <span className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-purple-500" />
+                    {t.howItWorks.glitterTitle}
+                  </span>
+                </AccordionTrigger>
+                <AccordionContent className="pb-5">
+                  <div className="space-y-3">
+                    {t.howItWorks.glitterSteps.map((s, i) => (
+                      <div key={i} className="flex items-center gap-3 text-sm text-muted-foreground">
+                        <span className="w-6 h-6 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-xs shrink-0">
+                          {i + 1}
+                        </span>
+                        {s}
+                      </div>
+                    ))}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          </div>
         </div>
       </div>
     </section>

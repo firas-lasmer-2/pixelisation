@@ -104,7 +104,7 @@ export function ProductShowcase() {
                   </p>
 
                   {/* How it works mini-steps */}
-                  <div className="space-y-2 mb-6">
+                  <div className="space-y-2 mb-5">
                     {card.howItWorks.map((step, i) => (
                       <div key={i} className="flex items-center gap-2 text-xs text-muted-foreground">
                         <span className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-[10px] shrink-0">
@@ -115,14 +115,20 @@ export function ProductShowcase() {
                     ))}
                   </div>
 
+                  {/* Feature pills */}
+                  <div className="flex flex-wrap gap-1.5 mb-5">
+                    {meta.features.map((f) => (
+                      <span
+                        key={f}
+                        className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-primary/5 text-primary/80"
+                      >
+                        {f}
+                      </span>
+                    ))}
+                  </div>
+
                   <Button
-                    onClick={() =>
-                      navigate(
-                        card.key === "paint_by_numbers"
-                          ? `/studio?product=${card.key}`
-                          : `/studio/manual?product=${card.key}`
-                      )
-                    }
+                    onClick={() => navigate(`/studio?product=${card.key}`)}
                     variant="outline"
                     className="w-full gap-2 group-hover:bg-primary group-hover:text-primary-foreground group-hover:border-primary transition-colors"
                     size="sm"

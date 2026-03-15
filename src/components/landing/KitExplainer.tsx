@@ -1,6 +1,7 @@
 import { useTranslation } from "@/i18n";
 import { Grid3X3, Stamp, BookOpen, Package } from "lucide-react";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
+import { ProductContextBadge } from "@/components/shared/ProductContextBadge";
 
 const icons = [Grid3X3, Stamp, BookOpen, Package];
 const accentColors = [
@@ -23,9 +24,7 @@ export function KitExplainer() {
 
       <div className="container relative mx-auto px-4">
         <div ref={sectionRef} className="scroll-reveal mx-auto mb-20 max-w-3xl text-center">
-          <span className="mb-4 inline-block text-sm font-semibold uppercase tracking-[0.2em] text-primary">
-            {t.kit.sectionTitle}
-          </span>
+          <ProductContextBadge />
           <h2 className="mb-6 text-4xl font-bold md:text-5xl">{t.kit.sectionTitle}</h2>
           <p className="text-lg text-muted-foreground">{t.kit.sectionSubtitle}</p>
         </div>

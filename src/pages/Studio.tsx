@@ -4,7 +4,7 @@ import { Area } from "react-easy-crop";
 import { Navbar } from "@/components/shared/Navbar";
 import { Footer } from "@/components/landing/Footer";
 import { useTranslation } from "@/i18n";
-import { useOrder, getPhoto, isManualArtworkProduct, PRICING, TUNISIAN_GOVERNORATES, CATEGORY_META, DREAM_JOBS, ADD_ONS, getAvailableAddOns, STENCIL_DETAIL_META, type KitSize, type ArtStyle, type ContactInfo, type ShippingInfo, type OrderCategory, type ProductType, type StencilDetailLevel, type GlitterPalette } from "@/lib/store";
+import { useOrder, getPhoto, isManualArtworkProduct, PRICING, TUNISIAN_GOVERNORATES, CATEGORY_META, CATEGORY_THEMES, DREAM_JOBS, ADD_ONS, getAvailableAddOns, STENCIL_DETAIL_META, type KitSize, type ArtStyle, type ContactInfo, type ShippingInfo, type OrderCategory, type ProductType, type StencilDetailLevel, type GlitterPalette } from "@/lib/store";
 import {
   DEFAULT_PUBLIC_KIT,
   KIT_TONE_STYLES,
@@ -20,6 +20,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { UploadZone } from "@/components/UploadZone";
 import { CategorySelector } from "@/components/studio/CategorySelector";
+import { CategoryThemePicker } from "@/components/studio/CategoryThemePicker";
 import { ProductTypePicker } from "@/components/studio/ProductTypePicker";
 import { StencilDetailPicker } from "@/components/studio/StencilDetailPicker";
 import { GlitterPalettePicker } from "@/components/studio/GlitterPalettePicker";
@@ -188,7 +189,7 @@ const Studio = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const resumeSessionId = searchParams.get("resume")?.trim() || null;
-  const { order, setCategory, setProductType, setPhoto, removePhoto, setCroppedArea, setStyle, setStylePreviewUrl, setSize, setAddOns, setStencilDetailLevel, setCustomStencilDataUrl, setGlitterPalette, setContact, setShipping, setGift, setDreamJob, setAiGeneratedUrl, confirmOrder } = useOrder();
+  const { order, setCategory, setProductType, setPhoto, removePhoto, setCroppedArea, setStyle, setStylePreviewUrl, setSize, setAddOns, setStencilDetailLevel, setCustomStencilDataUrl, setGlitterPalette, setContact, setShipping, setGift, setDreamJob, setCategoryTheme, setAiGeneratedUrl, confirmOrder } = useOrder();
   const [step, setStep] = useState(1);
   const [processing, setProcessing] = useState(false);
   const [aiGenerating, setAiGenerating] = useState(false);
@@ -226,16 +227,16 @@ const Studio = () => {
     if (resumeSessionId) return;
     const cat = searchParams.get("category");
     const product = searchParams.get("product");
-    if (product && (product === "stencil_paint" || product === "glitter_reveal")) {
-      navigate(`/studio/manual?product=${product}`, { replace: true });
-      return;
+    if (product && ["paint_by_numbers", "stencil_paint", "glitter_reveal"].includes(product)) {
+      setProductType(product as ProductType);
+      // Manual artwork products are classic-only
+      if (product === "stencil_paint" || product === "glitter_reveal") {
+        setCategory("classic");
+      }
     }
     if (cat && ["classic", "family", "kids_dream", "pet"].includes(cat)) {
       setCategory(cat as OrderCategory);
       setStep(2); // Skip category selection
-    }
-    if (product && ["paint_by_numbers", "stencil_paint", "glitter_reveal"].includes(product)) {
-      setProductType(product as ProductType);
     }
   }, [navigate, resumeSessionId, searchParams, setCategory, setProductType]);
 
@@ -298,11 +299,6 @@ const Studio = () => {
       const cart = data?.cart;
       if (!cart) {
         setRecoveringCart(false);
-        return;
-      }
-
-      if (cart.productType && isManualArtworkProduct(cart.productType as ProductType)) {
-        navigate(`/studio/manual?resume=${encodeURIComponent(resumeSessionId)}`, { replace: true });
         return;
       }
 
@@ -612,12 +608,24 @@ const Studio = () => {
           category: order.category,
           images,
           dreamJob: order.dreamJob,
+          categoryTheme: order.categoryTheme || null,
           sessionId,
           requestedBy: "studio",
         },
       });
 
-      if (error) throw error;
+      if (error) {
+        // Extract the actual error message from the edge function response body
+        try {
+          const body = await (error as { context?: { json?: () => Promise<unknown> } }).context?.json?.();
+          if (body && typeof body === 'object' && 'error' in body && typeof body.error === 'string') {
+            throw new Error(body.error);
+          }
+        } catch (parseErr) {
+          if (parseErr instanceof Error && parseErr.message !== error.message) throw parseErr;
+        }
+        throw error;
+      }
       if (data?.error) throw new Error(data.error);
 
       const imageUrl = data.imageUrl;
@@ -662,7 +670,8 @@ const Studio = () => {
       setProcessing(false);
       toast({ title: "Image IA générée ✨", description: "Choisissez votre style artistique." });
       goToStep(getStyleStep());
-    } catch (err: any) {
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "unknown_error";
       console.error("AI generation failed:", err);
       setAiGenerating(false);
       setProcessing(false);
@@ -671,9 +680,9 @@ const Studio = () => {
         eventName: "ai_generation_failed",
         category: order.category,
         step: getAIStep(),
-        metadata: { message: err?.message || "unknown_error" },
+        metadata: { message: errorMsg },
       });
-      toast({ title: "Erreur", description: err.message || "La génération IA a échoué. Réessayez.", variant: "destructive" });
+      toast({ title: "Erreur", description: errorMsg === "unknown_error" ? "La génération IA a échoué. Réessayez." : errorMsg, variant: "destructive" });
     }
   };
 
@@ -787,7 +796,6 @@ const Studio = () => {
   const getStyleStep = () => isAICategory ? 6 : 5;
   const getConfirmStep = () => isAICategory ? 7 : 6;
 
-  const showHero = !processing && step !== getCropStep() && step !== getAIStep();
 
   const photo = getPhoto(order);
   const photoForProcessing = order.aiGeneratedUrl || photo;
@@ -812,52 +820,57 @@ const Studio = () => {
   }
 
   return (
-    <div className="h-[100dvh] bg-background flex flex-col overflow-hidden">
+    <div className="h-[100dvh] bg-white flex flex-col overflow-hidden font-sans text-foreground">
       <Navbar />
 
-      <div className="flex-1 flex flex-col overflow-hidden studio-bg">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide">
 
-        {/* SINGLE COLUMN PANE: Controls */}
-        <div className="w-full h-full overflow-y-auto overflow-x-hidden scrollbar-hide relative bg-white">
-          
-          {/* Header */}
-          <div className="px-6 py-6 lg:px-12 lg:py-8 sticky top-0 z-20 bg-white/95 backdrop-blur-xl border-b border-black/[0.04]">
-             <div className="flex items-center justify-between mb-6">
-               <div>
-                 <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground mb-1.5">Studio Helma</p>
-                 <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-foreground">{CATEGORY_META[order.category]?.label || "Studio"}</h1>
-               </div>
-               {isAICategory && (
-                  <span className="inline-flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-full bg-blue-50/50 text-blue-600 border border-blue-100/50">
-                    <Sparkles className="h-3.5 w-3.5" /> Intelligence Artificielle
-                  </span>
-               )}
-             </div>
-             {/* Minified step tracker directly embedded here for ultra-clean look */}
-             <div className="flex items-center gap-1.5">
-               {stepMeta.map((item, index) => {
-                 const stepNum = index + 1;
-                 const isActive = stepNum === step;
-                 const isPast = stepNum < step;
-                 const targetClickable = stepNum <= step;
-                 
-                 return (
-                   <div 
-                     key={index} 
-                     onClick={() => targetClickable && goToStep(stepNum)}
-                     className={`h-1.5 rounded-full transition-all duration-300 ${
-                       isActive ? 'w-8 bg-primary' : 
-                       isPast ? 'w-4 bg-primary/30 cursor-pointer hover:bg-primary/50' : 
-                       'w-2 bg-black/5'
-                     }`} 
-                     title={item.label}
-                   />
-                 )
-               })}
-             </div>
+        {/* Sticky header */}
+        <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-xl border-b border-black/[0.04]">
+          <div className="max-w-3xl mx-auto px-6 py-5 lg:px-8">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground mb-1">Studio Helma</p>
+                <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-foreground">{CATEGORY_META[order.category]?.label || "Studio"}</h1>
+              </div>
+              {isAICategory && (
+                <span className="inline-flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-full bg-blue-50/50 text-blue-600 border border-blue-100/50">
+                  <Sparkles className="h-3.5 w-3.5" /> Intelligence Artificielle
+                </span>
+              )}
+            </div>
+            {/* Step tracker */}
+            <div className="flex items-center gap-1 flex-wrap">
+              {stepMeta.map((item, index) => {
+                const stepNum = index + 1;
+                const isActive = stepNum === step;
+                const isPast = stepNum < step;
+                const Icon = item.icon;
+                return (
+                  <button
+                    key={index}
+                    type="button"
+                    onClick={() => stepNum <= step && goToStep(stepNum)}
+                    disabled={stepNum > step}
+                    title={item.label}
+                    className={`flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-semibold transition-all duration-300 ${
+                      isActive
+                        ? "bg-primary/10 text-primary"
+                        : isPast
+                        ? "text-primary/40 hover:text-primary/60 cursor-pointer hover:bg-primary/5"
+                        : "text-black/20 cursor-default"
+                    }`}
+                  >
+                    <Icon className="h-3 w-3 shrink-0" />
+                    <span className={isActive ? "" : "hidden sm:inline"}>{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
+        </div>
 
-          <div className="p-6 lg:p-10 max-w-3xl mx-auto pb-32">
+        <div className="max-w-3xl mx-auto px-6 lg:px-8 pb-32 pt-8">
             <div key={animKey} className={slideClass}>
 
               {/* ═══════════════════════════════════════════
@@ -870,26 +883,40 @@ const Studio = () => {
                       title="Choisissez votre technique"
                       subtitle="Trois façons uniques de transformer votre photo en œuvre d'art."
                     />
-                    <ProductTypePicker selected={order.productType} onSelect={(type) => setProductType(type)} />
+                    <ProductTypePicker selected={order.productType} onSelect={(type) => {
+                      setProductType(type);
+                      // Manual artwork products are classic-only
+                      if (isManualArtworkProduct(type)) {
+                        setCategory("classic");
+                      }
+                    }} />
                   </div>
 
-                  <div>
-                    <SectionHeading
-                      title="Choisissez votre sujet"
-                      subtitle="Qui sera au cœur de votre création ?"
-                    />
-                    <CategorySelector selected={order.category} onSelect={(cat) => setCategory(cat)} />
-                  </div>
+                  {!isManualArtworkProduct(order.productType) && (
+                    <div>
+                      <SectionHeading
+                        title="Choisissez votre sujet"
+                        subtitle="Qui sera au cœur de votre création ?"
+                      />
+                      <CategorySelector
+                        selected={order.category}
+                        onSelect={(cat) => {
+                          setCategory(cat);
+                          const themes = CATEGORY_THEMES[cat];
+                          setCategoryTheme(themes?.[0]?.key || "");
+                        }}
+                      />
+                      <CategoryThemePicker
+                        category={order.category}
+                        selected={order.categoryTheme}
+                        onSelect={setCategoryTheme}
+                      />
+                    </div>
+                  )}
 
                   <div className="flex justify-end">
                     <Button
-                      onClick={() => {
-                        if (isManualArtworkProduct(order.productType)) {
-                          navigate(`/studio/manual?product=${order.productType}`);
-                          return;
-                        }
-                        goToStep(2);
-                      }}
+                      onClick={() => goToStep(2)}
                       className="gap-2 btn-premium text-primary-foreground border-0 px-8"
                       size="lg"
                     >
@@ -974,10 +1001,10 @@ const Studio = () => {
                           key={kit.id}
                           type="button"
                           onClick={() => setSize(kit.id)}
-                          className={`group relative overflow-hidden rounded-3xl border-2 p-5 text-left transition-all duration-300 hover:shadow-lg sm:p-6 ${
+                          className={`group relative overflow-hidden rounded-[32px] border p-6 text-left transition-all duration-400 ease-out hover:-translate-y-1 ${
                             isSelected
-                              ? "border-primary bg-primary/[0.03] shadow-lg"
-                              : "border-border/60 bg-card hover:border-primary/30"
+                              ? "border-primary bg-primary/[0.02] shadow-[0_8px_30px_-10px_rgba(0,0,0,0.1)] ring-1 ring-primary/20"
+                              : "border-black/[0.04] bg-[#FAFAFA] hover:shadow-[0_8px_30px_-10px_rgba(0,0,0,0.05)] hover:bg-white"
                           }`}
                         >
                           {/* Top row: name + badge + selection indicator */}
@@ -991,8 +1018,8 @@ const Studio = () => {
                                 </span>
                               )}
                             </div>
-                            <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
-                              isSelected ? "border-primary bg-primary" : "border-border"
+                            <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition-all duration-300 ${
+                              isSelected ? "border-primary bg-primary shadow-sm scale-110" : "border-black/10 bg-white"
                             }`}>
                               {isSelected && <Check className="h-3.5 w-3.5 text-primary-foreground" />}
                             </div>
@@ -1031,7 +1058,10 @@ const Studio = () => {
 
                   {/* ── Included perks ── */}
                   <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
-                    {["Toile numérotée", "Peintures assorties", "PDF premium", "Viewer interactif", "Livraison offerte"].map((perk) => (
+                    {(isStencilProduct
+                      ? ["Toile avec pochoir", "Préparation artisanale", "Livraison offerte"]
+                      : ["Toile numérotée", "Peintures assorties", "PDF premium", "Viewer interactif", "Livraison offerte"]
+                    ).map((perk) => (
                       <span key={perk} className="flex items-center gap-1.5">
                         <Check className="h-3.5 w-3.5 text-primary" />
                         {perk}
@@ -1077,11 +1107,14 @@ const Studio = () => {
                     /* Classic: single upload */
                     <>
                       {photo ? (
-                        <div className="space-y-6">
-                          <div className="overflow-hidden rounded-xl border-2 border-primary/20 shadow-lg bg-card p-3 max-w-lg mx-auto">
-                            <img src={photo} alt="Uploaded" className="w-full max-h-96 object-contain rounded-lg animate-scale-in" />
+                        <div className="space-y-8">
+                          {/* Desktop users see photo in left pane, Mobile users see it here */}
+                          <div className="lg:hidden overflow-hidden rounded-3xl border border-black/[0.04] shadow-[0_8px_30px_-10px_rgba(0,0,0,0.08)] bg-white p-2 mx-auto">
+                            <div className="rounded-2xl overflow-hidden bg-[#FAFAFA] relative">
+                               <img src={photo} alt="Uploaded" className="w-full max-h-96 object-contain animate-scale-in" />
+                            </div>
                           </div>
-                          <div className="flex gap-3 justify-center">
+                          <div className="flex flex-col sm:flex-row gap-3 justify-center">
                             <Button variant="outline" onClick={() => { setPhoto("", 0); removePhoto(0); setPreviews([]); }} className="gap-2">
                               <Camera className="h-4 w-4" />
                               Changer la photo
@@ -1128,7 +1161,7 @@ const Studio = () => {
                   )}
 
                   <div className="mt-8 flex justify-between">
-                    <Button variant="outline" onClick={() => goToStep(getUpsellStep())} className="gap-2">
+                    <Button variant="outline" onClick={() => goToStep(getKitStep())} className="gap-2">
                       <BackIcon className="h-4 w-4" /> Retour
                     </Button>
                     {order.category !== "classic" && (
@@ -1309,16 +1342,17 @@ const Studio = () => {
                         subtitle={t.studio.step2.subtitle}
                       />
 
-                      {/* Source image preview */}
+                      {/* Source image preview (Mobile Only) */}
                       {(order.aiGeneratedUrl || photo) && (
-                        <div className="mb-8 flex justify-center">
-                          <div className="relative rounded-2xl overflow-hidden shadow-[0_8px_30px_rgba(0,0,0,0.12)] ring-1 ring-border/40 max-h-64 max-w-sm w-full">
-                            <img
-                              src={order.aiGeneratedUrl || photo}
-                              className="w-full max-h-64 object-contain bg-[#F5F5F5]"
-                              alt="Votre photo"
-                            />
-                            <div className="absolute bottom-0 inset-x-0 h-8 bg-gradient-to-t from-black/20 to-transparent" />
+                        <div className="mb-8 flex justify-center lg:hidden">
+                          <div className="relative rounded-[32px] overflow-hidden shadow-[0_8px_30px_-10px_rgba(0,0,0,0.08)] ring-1 ring-black/[0.04] max-h-64 max-w-sm w-full bg-white p-2">
+                             <div className="rounded-[24px] overflow-hidden bg-[#FAFAFA] h-full w-full">
+                                <img
+                                  src={order.aiGeneratedUrl || photo}
+                                  className="w-full max-h-64 object-contain"
+                                  alt="Votre photo"
+                                />
+                             </div>
                           </div>
                         </div>
                       )}
@@ -1350,19 +1384,21 @@ const Studio = () => {
                         })}
                       </div>
 
-                      {/* Selected style result preview */}
+                      {/* Selected style result preview (Mobile Only) */}
                       {order.stylePreviewUrl && (
-                        <div className="mt-6 flex justify-center">
-                          <div className="relative rounded-2xl overflow-hidden shadow-[0_8px_30px_rgba(0,0,0,0.12)] ring-2 ring-primary/30 max-h-72 max-w-sm w-full">
-                            <img
-                              src={order.stylePreviewUrl}
-                              className="w-full max-h-72 object-contain bg-[#F5F5F5] animate-fade-in"
-                              alt="Aperçu du style sélectionné"
-                            />
-                            <div className="absolute top-2 left-2">
-                              <span className="inline-flex items-center gap-1 rounded-full bg-primary/90 text-primary-foreground px-2.5 py-1 text-[11px] font-semibold backdrop-blur-sm">
-                                <Check className="h-3 w-3" /> Aperçu
-                              </span>
+                        <div className="mt-8 flex justify-center lg:hidden">
+                          <div className="relative rounded-[32px] overflow-hidden shadow-[0_8px_30px_-10px_rgba(0,0,0,0.1)] ring-1 ring-primary/20 max-h-72 max-w-sm w-full bg-white p-2">
+                            <div className="rounded-[24px] overflow-hidden bg-[#FAFAFA] h-full w-full relative">
+                              <img
+                                src={order.stylePreviewUrl}
+                                className="w-full max-h-72 object-contain animate-fade-in"
+                                alt="Aperçu du style sélectionné"
+                              />
+                              <div className="absolute top-3 left-3">
+                                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/90 text-primary px-3 py-1.5 text-xs font-semibold shadow-sm backdrop-blur-md">
+                                  <Check className="h-3.5 w-3.5" /> Aperçu
+                                </span>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -1395,10 +1431,12 @@ const Studio = () => {
                     {/* Left: forms */}
                     <div className="space-y-6">
                       {/* Contact */}
-                      <div className="rounded-xl border bg-card p-6">
-                        <div className="mb-5 flex items-center gap-2">
-                          <User className="h-4 w-4 text-primary" />
-                          <h3 className="text-sm font-bold uppercase tracking-[0.1em] section-gold-line pb-2">Contact</h3>
+                      <div className="rounded-[24px] border border-black/[0.04] bg-[#FAFAFA] p-6 shadow-sm">
+                        <div className="mb-6 flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                            <User className="h-4 w-4 text-primary" />
+                          </div>
+                          <h3 className="text-sm font-bold uppercase tracking-[0.1em] text-foreground/80">Contact</h3>
                         </div>
                         <div className="grid gap-4 sm:grid-cols-2">
                           <div className="space-y-2">
@@ -1431,10 +1469,12 @@ const Studio = () => {
                       </div>
 
                       {/* Shipping */}
-                      <div className="rounded-xl border bg-card p-6">
-                        <div className="mb-5 flex items-center gap-2">
-                          <MapPin className="h-4 w-4 text-primary" />
-                          <h3 className="text-sm font-bold uppercase tracking-[0.1em] section-gold-line pb-2">Adresse de livraison</h3>
+                      <div className="rounded-[24px] border border-black/[0.04] bg-[#FAFAFA] p-6 shadow-sm">
+                        <div className="mb-6 flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                            <MapPin className="h-4 w-4 text-primary" />
+                          </div>
+                          <h3 className="text-sm font-bold uppercase tracking-[0.1em] text-foreground/80">Livraison</h3>
                         </div>
                         <div className="space-y-4">
                           <div className="space-y-2">
@@ -1472,7 +1512,7 @@ const Studio = () => {
                       </div>
 
                       {/* Gift mode */}
-                      <div className="rounded-xl border bg-card p-6">
+                      <div className="rounded-[24px] border border-black/[0.04] bg-[#FAFAFA] p-6 shadow-sm">
                         <div className="flex items-center gap-3">
                           <Checkbox id="gift-mode" checked={isGift} onCheckedChange={(checked) => setIsGift(checked === true)} />
                           <Label htmlFor="gift-mode" className="cursor-pointer flex items-center gap-2 text-sm font-medium">
@@ -1490,13 +1530,13 @@ const Studio = () => {
 
                     {/* Right: Premium Order Summary */}
                     <div className="lg:sticky lg:top-24 space-y-4">
-                      <div className="rounded-xl border overflow-hidden glass-summary shadow-lg">
-                        <div className="bg-primary/5 px-5 py-3 border-b border-border">
-                          <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-primary">
+                      <div className="rounded-[24px] border border-black/[0.04] overflow-hidden bg-white shadow-[0_8px_30px_-10px_rgba(0,0,0,0.08)]">
+                        <div className="bg-[#FAFAFA] px-6 py-4 border-b border-black/[0.04]">
+                          <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-foreground/70">
                             Votre commande
                           </h3>
                         </div>
-                        <div className="p-5 space-y-4">
+                        <div className="p-6 space-y-5">
                           {/* Category badge */}
                           <div className="flex items-center gap-2">
                             <span className="text-lg">{CATEGORY_META[order.category].icon}</span>
@@ -1640,7 +1680,6 @@ const Studio = () => {
             </div>
           </div>
         </div>
-      </div>
       <SaveProgressModal open={showSaveModal} onOpenChange={setShowSaveModal} step={step} />
     </div>
   );

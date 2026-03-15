@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { CATEGORY_META, type OrderCategory } from "@/lib/store";
 import { ArrowRight, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ProductContextBadge } from "@/components/shared/ProductContextBadge";
 import catClassic from "@/assets/cat-classic.png";
 import catFamily from "@/assets/cat-family.png";
 import catKidsDream from "@/assets/cat-kids-dream.png";
@@ -24,16 +25,11 @@ export const CATEGORY_IMAGES: Record<OrderCategory, string> = {
   anime: catAnime,
 };
 
-const CATEGORIES: { key: OrderCategory; gradient: string; hoverBg: string }[] = [
+const FEATURED_CATEGORIES: { key: OrderCategory; gradient: string; hoverBg: string }[] = [
   { key: "classic", gradient: "from-primary/20 via-primary/10 to-transparent", hoverBg: "group-hover:bg-primary/5" },
   { key: "family", gradient: "from-accent/20 via-accent/10 to-transparent", hoverBg: "group-hover:bg-accent/5" },
   { key: "kids_dream", gradient: "from-blue-500/20 via-blue-500/10 to-transparent", hoverBg: "group-hover:bg-blue-500/5" },
-  { key: "pet", gradient: "from-amber-500/20 via-amber-500/10 to-transparent", hoverBg: "group-hover:bg-amber-500/5" },
-  { key: "superhero", gradient: "from-red-500/20 via-red-500/10 to-transparent", hoverBg: "group-hover:bg-red-500/5" },
   { key: "couple", gradient: "from-pink-500/20 via-pink-500/10 to-transparent", hoverBg: "group-hover:bg-pink-500/5" },
-  { key: "historical", gradient: "from-amber-700/20 via-amber-700/10 to-transparent", hoverBg: "group-hover:bg-amber-700/5" },
-  { key: "scifi", gradient: "from-cyan-500/20 via-cyan-500/10 to-transparent", hoverBg: "group-hover:bg-cyan-500/5" },
-  { key: "anime", gradient: "from-violet-500/20 via-violet-500/10 to-transparent", hoverBg: "group-hover:bg-violet-500/5" },
 ];
 
 export function CategoryShowcase() {
@@ -43,9 +39,7 @@ export function CategoryShowcase() {
       
       <div className="container mx-auto px-4 relative">
         <div className="text-center mb-14">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary mb-3">
-            4 expériences créatives
-          </p>
+          <ProductContextBadge />
           <h2
             className="text-3xl sm:text-4xl font-bold mb-4"
             style={{ fontFamily: "'Playfair Display', serif" }}
@@ -53,12 +47,12 @@ export function CategoryShowcase() {
             Choisissez votre expérience
           </h2>
           <p className="text-muted-foreground max-w-lg mx-auto">
-            Du portrait classique aux créations IA — chaque catégorie offre une expérience unique
+            Du portrait classique aux créations IA — 9 catégories disponibles dont 8 avec génération IA
           </p>
         </div>
 
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4 max-w-6xl mx-auto">
-          {CATEGORIES.map((cat, idx) => {
+          {FEATURED_CATEGORIES.map((cat, idx) => {
             const meta = CATEGORY_META[cat.key];
             const isAI = cat.key !== "classic";
 

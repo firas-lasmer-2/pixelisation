@@ -14,7 +14,7 @@ export const fr = {
   hero: {
     title: "Transformez vos photos en œuvres d'art personnalisées",
     subtitle:
-      "Uploadez votre photo, choisissez un style artistique, et recevez un kit de peinture par numéros premium pour créer votre portrait unique.",
+      "Transformez vos photos en œuvres d'art personnalisées — peinture par numéros, pochoir révélable ou paillettes scintillantes.",
     cta: "Créer mon portrait",
     badge: "Livraison gratuite partout en Tunisie",
     trustPortraits: "+500 portraits livrés",
@@ -42,6 +42,18 @@ export const fr = {
         title: "Recevez votre kit",
         description: "Votre kit de peinture par numéros personnalisé arrive chez vous, prêt à peindre.",
       },
+    ],
+    stencilTitle: "Comment ça marche — Stencil Paint Reveal",
+    stencilSteps: [
+      "Uploadez votre photo et choisissez votre format",
+      "Recevez votre toile avec pochoir préparé artisanalement",
+      "Peignez librement sur la toile, puis pelez le pochoir pour révéler votre portrait en blanc",
+    ],
+    glitterTitle: "Comment ça marche — Glitter Reveal",
+    glitterSteps: [
+      "Uploadez votre photo et choisissez votre format",
+      "Recevez votre toile avec pochoir et kit de paillettes",
+      "Saupoudrez les paillettes, pressez doucement, puis pelez le pochoir — la magie opère !",
     ],
   },
 
@@ -166,6 +178,14 @@ export const fr = {
       {
         question: "Que faire si ma photo n'est pas adaptée ?",
         answer: "Notre équipe vérifie chaque photo avant production. Si un ajustement est nécessaire, nous vous contacterons pour trouver la meilleure solution.",
+      },
+      {
+        question: "Quelle est la différence entre les trois produits ?",
+        answer: "La Peinture par Numéros est notre produit phare : vous peignez case par case avec des peintures acryliques. Le Stencil Paint Reveal : vous peignez librement sur la toile, puis pelez le pochoir pour révéler votre portrait en blanc. Le Glitter Reveal : vous saupoudrez des paillettes, puis pelez le pochoir pour une révélation scintillante.",
+      },
+      {
+        question: "Comment fonctionne le Stencil Paint / Glitter Reveal ?",
+        answer: "Uploadez votre photo, choisissez votre format, et nous préparons artisanalement votre toile avec un pochoir personnalisé. Vous recevez le kit prêt à l'emploi — il suffit de peindre (ou saupoudrer) puis de peler pour la révélation !",
       },
     ],
   },

@@ -8,23 +8,80 @@ const MAX_INPUT_BYTES = 10 * 1024 * 1024;
 const POLL_INTERVAL_MS = 3000;
 const MAX_POLL_ATTEMPTS = 20;
 
-const PROMPTS: Record<string, (params: { dreamJob?: string | null }) => string> = {
-  family: () =>
-    "High quality photorealistic portrait of the people in the reference photos. If two people are provided, naturally combine them into a single warm, emotionally rich scene. Studio lighting, clean neutral background, sharp facial details, professional photography quality. No text, no watermarks.",
-  kids_dream: (params) =>
-    `High quality portrait of the child dressed as a ${params.dreamJob || "superhero"}. Keep the child's face clearly recognizable. Vibrant colors, matching costume and props, natural confident pose. Clean simple background, professional studio lighting, sharp details. No text, no watermarks.`,
-  pet: () =>
-    "Majestic classical oil painting portrait of the pet. Rich dramatic lighting, regal composed pose, deep jewel-tone colors. Dark neutral background with soft vignette. The animal's face and fur textures are rendered in fine detail. No text, no watermarks.",
-  superhero: () =>
-    "Epic cinematic superhero portrait of the person in the photo. Keep facial features recognizable. Dynamic powerful pose, detailed super-suit, dramatic hero lighting with strong contrast. Clean dark or atmospheric background. No text, no logos, no watermarks.",
-  couple: () =>
-    "Beautiful romantic portrait of the couple from the reference photos. Both people look natural and connected together. Warm soft lighting, shallow depth of field with simple clean background. Sharp faces, natural expressions, professional photography quality. No text, no watermarks.",
-  historical: () =>
-    "Classical Renaissance oil painting portrait of the person in the photo. Elegant period-appropriate attire with fine fabric detail, dramatic Rembrandt lighting, deep warm tones. Dark painterly background. Face clearly recognizable with fine detail. No text, no watermarks.",
-  scifi: () =>
-    "Cinematic sci-fi portrait of the person in the photo. Futuristic high-tech outfit, dramatic neon accent lighting against a dark atmospheric background. Face clearly recognizable, sharp detail. Cyberpunk aesthetic with rich contrast and vivid color. No text, no watermarks.",
-  anime: () =>
-    "High quality Japanese anime illustration of the person in the photo. Polished cel-shaded style, vibrant saturated colors, expressive eyes, clean smooth linework. Simple clean gradient background. Face recognizable and detailed. No text, no watermarks.",
+const PROMPTS: Record<string, (params: { dreamJob?: string | null; theme?: string | null }) => string> = {
+  family: ({ theme }) => {
+    const sceneMap: Record<string, string> = {
+      outdoor: "Golden hour outdoor portrait: natural park setting with dappled sunlight.",
+      formal:  "Elegant formal portrait: dark professional background, studio lighting.",
+    };
+    const scene = (theme && sceneMap[theme]) || "warm studio lighting, clean neutral background";
+    return `High quality photorealistic portrait of the people in the reference photos. ${scene}. If two people are provided, naturally combine them into a single warm, emotionally rich scene. Sharp facial details, professional quality. No text, no watermarks.`;
+  },
+  kids_dream: ({ dreamJob }) =>
+    `High quality portrait of the child dressed as a ${dreamJob || "superhero"}. Keep the child's face clearly recognizable. Vibrant colors, matching costume and props, natural confident pose. Clean simple background, professional studio lighting, sharp details. No text, no watermarks.`,
+  pet: ({ theme }) => {
+    const styleMap: Record<string, string> = {
+      watercolor: "Gentle watercolor painting: soft colors, paper texture, expressive eyes and fur.",
+      fantasy:    "Epic fantasy: the pet as a medieval knight or wizard with glowing magical aura.",
+      modern:     "Modern stylized graphic art: bold colors, clean geometric shapes, contemporary illustration.",
+    };
+    const style = (theme && styleMap[theme]) || "majestic classical oil painting with rich jewel-tone colors and dramatic Rembrandt lighting";
+    return `Portrait of the pet in the photo. Style: ${style}. The animal's face and fur textures are rendered in fine detail. Dark neutral background with soft vignette. No text, no watermarks.`;
+  },
+  superhero: ({ theme }) => {
+    const heroMap: Record<string, string> = {
+      superman:       "Superman-inspired blue suit and red cape, city skyline in the background",
+      batman:         "Batman-inspired dark armored suit and cowl, gothic Gotham city atmosphere",
+      "spider-man":   "Spider-Man inspired red and blue suit, city rooftop background with webs",
+      "wonder-woman": "Wonder Woman inspired golden armor and tiara, warrior goddess heroic pose",
+      "iron-man":     "Iron Man inspired red and gold high-tech armored suit with glowing arc reactor",
+      captain:        "Captain America inspired blue uniform with the iconic vibranium shield",
+      thor:           "Thor inspired Norse warrior attire with Mjolnir hammer, dramatic lightning in background",
+      "black-panther":"Black Panther inspired sleek vibranium suit, Wakandan golden city background",
+    };
+    const heroDesc = (theme && heroMap[theme]) || "a custom epic super-suit";
+    return `Epic cinematic superhero portrait of the person in the photo wearing ${heroDesc}. Keep facial features clearly recognizable. Dynamic powerful pose, dramatic hero lighting with strong contrast. No text, no logos, no watermarks.`;
+  },
+  couple: ({ theme }) => {
+    const sceneMap: Record<string, string> = {
+      paris:   "with the Eiffel Tower visible in the soft-focus background at golden hour",
+      beach:   "on a tropical beach at sunset, warm golden light, calm ocean behind them",
+      forest:  "in an enchanted forest, dappled sunlight through the trees, fairy-tale atmosphere",
+      cafe:    "inside a cozy vintage Parisian café, warm amber lighting, bokeh background",
+      tuscany: "in the rolling golden hills of Tuscany, Italian countryside backdrop at sunset",
+    };
+    const scene = (theme && sceneMap[theme]) || "with soft warm romantic studio lighting";
+    return `Beautiful romantic portrait of the couple from the reference photos ${scene}. Both people look natural and connected. Shallow depth of field, sharp faces, professional photography quality. No text, no watermarks.`;
+  },
+  historical: ({ theme }) => {
+    const eraMap: Record<string, string> = {
+      victorian:     "Victorian England: elegant aristocratic clothing, rich dark wood interior, classical portrait style.",
+      egypt:         "Ancient Egyptian pharaonic portrait: gold jewelry and headdress, hieroglyphs and pyramids in background.",
+      "belle-epoque":"Belle Époque Paris 1900: elegant high-fashion, ornate interior with warm candlelight.",
+      rome:          "Ancient Roman portrait: toga and laurel wreath, marble columns and forum in background.",
+    };
+    const era = (theme && eraMap[theme]) || "Classical Renaissance: elegant period-appropriate attire with fine fabric detail.";
+    return `Historical oil painting portrait of the person in the photo. Setting: ${era}. Dramatic Rembrandt lighting, deep warm tones. Face clearly recognizable with fine detail. No text, no watermarks.`;
+  },
+  scifi: ({ theme }) => {
+    const universeMap: Record<string, string> = {
+      space:    "NASA-style space explorer suit, stars and nebulae in background, astronaut helmet visor.",
+      dystopia: "Post-apocalyptic wasteland warrior in rugged salvaged armor, ruined city background, dust haze.",
+      starwars: "Star Wars inspired Jedi with a glowing lightsaber, galactic space background.",
+    };
+    const universe = (theme && universeMap[theme]) || "Cyberpunk 2077: futuristic high-tech outfit, dramatic neon accent lighting, dark atmospheric city.";
+    return `Cinematic sci-fi portrait of the person in the photo. Setting: ${universe}. Face clearly recognizable, sharp detail, vivid color. No text, no watermarks.`;
+  },
+  anime: ({ theme }) => {
+    const styleMap: Record<string, string> = {
+      ghibli:  "Studio Ghibli inspired: soft watercolor-like style, warm earthy tones, lush nature background.",
+      action:  "Dynamic shonen action anime: intense determined expression, power aura effects, dramatic speed lines.",
+      romance: "Romantic shojo manga style: soft pastel colors, sparkle effects, floral background.",
+      chibi:   "Super-deformed chibi style: oversized head, tiny body, huge expressive eyes, kawaii aesthetic.",
+    };
+    const style = (theme && styleMap[theme]) || "polished cel-shaded anime illustration: vibrant saturated colors, expressive eyes, clean smooth linework.";
+    return `High quality Japanese anime illustration of the person in the photo. Style: ${style}. Face recognizable and detailed. No text, no watermarks.`;
+  },
 };
 
 const CATEGORY_STYLES: Record<string, string> = {
@@ -129,7 +186,7 @@ serve(async (req) => {
   let inlineInputCount = 0;
 
   try {
-    const { category, images, dreamJob, sessionId, orderId, requestedBy } = await req.json();
+    const { category, images, dreamJob, categoryTheme, sessionId, orderId, requestedBy } = await req.json();
     if (!category || !Array.isArray(images) || images.length === 0) {
       return json(400, { error: "Missing category or images" });
     }
@@ -184,7 +241,7 @@ serve(async (req) => {
     }
 
     const formData = new FormData();
-    formData.append("prompt", promptFn({ dreamJob }));
+    formData.append("prompt", promptFn({ dreamJob, theme: categoryTheme }));
     formData.append("model", model);
     formData.append("aspect_ratio", "1:1");
     formData.append("style", CATEGORY_STYLES[category] || "Photorealistic");
