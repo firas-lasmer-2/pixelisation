@@ -3,6 +3,7 @@ import { Area } from "react-easy-crop";
 import React from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { KitSize as CatalogKitSize } from "@/lib/kitCatalog";
+import type { ImageAdjustments, PhotoEdit } from "@/lib/aiPhotoEdits";
 import { isCreateOrderPayloadTooLarge, optimizeOrderImageSource } from "@/lib/orderImage";
 
 export type OrderCategory = "classic" | "family" | "kids_dream" | "pet" | "superhero" | "couple" | "historical" | "scifi" | "anime";
@@ -131,6 +132,7 @@ export interface OrderState {
   category: OrderCategory;
   productType: ProductType;
   photos: string[];
+  photoEdits: Array<PhotoEdit | null>;
   croppedArea: Area | null;
   selectedStyle: ArtStyle | null;
   stylePreviewUrl: string;
@@ -150,7 +152,7 @@ export interface OrderState {
   categoryTheme: string;
   aiGeneratedUrl: string;
   aiGenerationRunId: string;
-  imageAdjustments: { brightness: number; contrast: number };
+  imageAdjustments: ImageAdjustments;
 }
 
 export function getPhoto(order: OrderState): string {
@@ -164,6 +166,7 @@ const initialState: OrderState = {
   category: "classic",
   productType: "paint_by_numbers",
   photos: [],
+  photoEdits: [],
   croppedArea: null,
   selectedStyle: null,
   stylePreviewUrl: "",
@@ -192,6 +195,8 @@ interface OrderContextType {
   setProductType: (productType: ProductType) => void;
   setPhoto: (photo: string, index?: number) => void;
   removePhoto: (index: number) => void;
+  setPhotoEdit: (index: number, edit: PhotoEdit | null) => void;
+  clearPhotoEdits: () => void;
   setCroppedArea: (area: Area) => void;
   setStyle: (style: ArtStyle, previewUrl: string) => void;
   setStylePreviewUrl: (previewUrl: string) => void;
@@ -207,7 +212,7 @@ interface OrderContextType {
   setDreamJob: (job: string) => void;
   setCategoryTheme: (theme: string) => void;
   setAiGeneratedUrl: (url: string, generationRunId?: string) => void;
-  setImageAdjustments: (adjustments: { brightness: number; contrast: number }) => void;
+  setImageAdjustments: (adjustments: ImageAdjustments) => void;
   confirmOrder: (input: {
     contact: ContactInfo;
     shipping: ShippingInfo;
@@ -237,6 +242,7 @@ export function OrderProvider({ children }: { children: ReactNode }) {
     ...o,
     category,
     photos: [],
+    photoEdits: [],
     croppedArea: null,
     selectedStyle: null,
     stylePreviewUrl: "",
@@ -256,13 +262,42 @@ export function OrderProvider({ children }: { children: ReactNode }) {
   })), []);
   const setPhoto = useCallback((photo: string, index = 0) => setOrder((o) => {
     const photos = [...o.photos];
+    const photoEdits = [...o.photoEdits];
     photos[index] = photo;
-    return { ...o, photos };
+    photoEdits[index] = null;
+    return {
+      ...o,
+      photos,
+      photoEdits,
+      croppedArea: null,
+      selectedStyle: null,
+      stylePreviewUrl: "",
+      aiGeneratedUrl: "",
+      aiGenerationRunId: "",
+      imageAdjustments: { brightness: 100, contrast: 100 },
+    };
   }), []);
   const removePhoto = useCallback((index: number) => setOrder((o) => {
     const photos = o.photos.filter((_, i) => i !== index);
-    return { ...o, photos };
+    const photoEdits = o.photoEdits.filter((_, i) => i !== index);
+    return {
+      ...o,
+      photos,
+      photoEdits,
+      croppedArea: null,
+      selectedStyle: null,
+      stylePreviewUrl: "",
+      aiGeneratedUrl: "",
+      aiGenerationRunId: "",
+      imageAdjustments: { brightness: 100, contrast: 100 },
+    };
   }), []);
+  const setPhotoEdit = useCallback((index: number, edit: PhotoEdit | null) => setOrder((o) => {
+    const photoEdits = [...o.photoEdits];
+    photoEdits[index] = edit;
+    return { ...o, photoEdits };
+  }), []);
+  const clearPhotoEdits = useCallback(() => setOrder((o) => ({ ...o, photoEdits: [] })), []);
   const setCroppedArea = useCallback((croppedArea: Area) => setOrder((o) => ({ ...o, croppedArea })), []);
   const setStyle = useCallback((selectedStyle: ArtStyle, stylePreviewUrl: string) => setOrder((o) => ({ ...o, selectedStyle, stylePreviewUrl })), []);
   const setStylePreviewUrl = useCallback((stylePreviewUrl: string) => setOrder((o) => ({ ...o, stylePreviewUrl })), []);
@@ -275,7 +310,7 @@ export function OrderProvider({ children }: { children: ReactNode }) {
   const setDreamJob = useCallback((dreamJob: string) => setOrder((o) => ({ ...o, dreamJob })), []);
   const setCategoryTheme = useCallback((categoryTheme: string) => setOrder((o) => ({ ...o, categoryTheme })), []);
   const setAiGeneratedUrl = useCallback((aiGeneratedUrl: string, aiGenerationRunId = "") => setOrder((o) => ({ ...o, aiGeneratedUrl, aiGenerationRunId })), []);
-  const setImageAdjustments = useCallback((imageAdjustments: { brightness: number; contrast: number }) => setOrder((o) => ({ ...o, imageAdjustments })), []);
+  const setImageAdjustments = useCallback((imageAdjustments: ImageAdjustments) => setOrder((o) => ({ ...o, imageAdjustments })), []);
   const setStencilDetailLevel = useCallback((stencilDetailLevel: StencilDetailLevel) => setOrder((o) => ({ ...o, stencilDetailLevel })), []);
   const setCustomStencilDataUrl = useCallback((customStencilDataUrl: string) => setOrder((o) => ({ ...o, customStencilDataUrl })), []);
   const setGlitterPalette = useCallback((glitterPalette: GlitterPalette) => setOrder((o) => ({ ...o, glitterPalette })), []);
@@ -386,7 +421,7 @@ export function OrderProvider({ children }: { children: ReactNode }) {
 
   return React.createElement(
     OrderContext.Provider,
-    { value: { order, setCategory, setProductType, setPhoto, removePhoto, setCroppedArea, setStyle, setStylePreviewUrl, setSize, setAddOns, setStencilDetailLevel, setCustomStencilDataUrl, setGlitterPalette, setContact, setShipping, setGift, setDedicationText, setDreamJob, setCategoryTheme, setAiGeneratedUrl, setImageAdjustments, confirmOrder, resetOrder } },
+    { value: { order, setCategory, setProductType, setPhoto, removePhoto, setPhotoEdit, clearPhotoEdits, setCroppedArea, setStyle, setStylePreviewUrl, setSize, setAddOns, setStencilDetailLevel, setCustomStencilDataUrl, setGlitterPalette, setContact, setShipping, setGift, setDedicationText, setDreamJob, setCategoryTheme, setAiGeneratedUrl, setImageAdjustments, confirmOrder, resetOrder } },
     children,
   );
 }

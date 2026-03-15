@@ -4,7 +4,7 @@ import { Area } from "react-easy-crop";
 import { Navbar } from "@/components/shared/Navbar";
 import { Footer } from "@/components/landing/Footer";
 import { useTranslation } from "@/i18n";
-import { useOrder, getPhoto, isManualArtworkProduct, PRICING, TUNISIAN_GOVERNORATES, CATEGORY_META, CATEGORY_THEMES, DREAM_JOBS, ADD_ONS, getAvailableAddOns, STENCIL_DETAIL_META, type KitSize, type ArtStyle, type ContactInfo, type ShippingInfo, type OrderCategory, type ProductType, type StencilDetailLevel, type GlitterPalette } from "@/lib/store";
+import { useOrder, getPhoto, isManualArtworkProduct, PRICING, TUNISIAN_GOVERNORATES, CATEGORY_META, CATEGORY_THEMES, DREAM_JOBS, ADD_ONS, getAvailableAddOns, PRODUCT_TYPE_META, STENCIL_DETAIL_META, type KitSize, type ArtStyle, type ContactInfo, type ShippingInfo, type OrderCategory, type ProductType, type StencilDetailLevel, type GlitterPalette } from "@/lib/store";
 import {
   DEFAULT_PUBLIC_KIT,
   KIT_TONE_STYLES,
@@ -26,16 +26,21 @@ import { StencilDetailPicker } from "@/components/studio/StencilDetailPicker";
 import { GlitterPalettePicker } from "@/components/studio/GlitterPalettePicker";
 import { DreamJobPicker } from "@/components/studio/DreamJobPicker";
 import { MultiUploadZone } from "@/components/studio/MultiUploadZone";
+import { AIGenerationLoadingPanel } from "@/components/studio/AIGenerationLoadingPanel";
+import { AiPhotoCropDialog } from "@/components/studio/AiPhotoCropDialog";
 import { StylePreviewCard } from "@/components/studio/StylePreviewCard";
 import { SaveProgressModal } from "@/components/shared/SaveProgressModal";
 import { CropScreen } from "@/components/CropScreen";
 import { ProcessingScreen } from "@/components/ProcessingScreen";
+import { getFriendlyAIGenerationError } from "@/lib/aiGeneration";
+import { buildAiInputImages, getPendingPhotoEditIndices, getPhotoPreviewSource, type ImageAdjustments } from "@/lib/aiPhotoEdits";
 import { processImage, ProcessingResult } from "@/lib/imageProcessing";
 import { processStencilImage, convertUploadedStencil, type StencilResult } from "@/lib/stencilProcessing";
 import { getStyleDefinition, getStyleDescription, getStyleLabel, orderStyleResults } from "@/lib/styles";
 import { GLITTER_PALETTES } from "@/lib/glitterPalettes";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -43,7 +48,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   ArrowLeft, ArrowRight, Check, Truck, CreditCard, Package,
-  Camera, Palette, User, MapPin, ShieldCheck, Sparkles, CheckCircle,
+  Camera, Palette, User, MapPin, ShieldCheck, Sparkles, CheckCircle, Crop,
   Layers, Star, Gift, Edit3, Crown, Upload, Tag, X, Wand2, Loader2, ShoppingBag,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
@@ -56,6 +61,71 @@ const BADGE_ICON_COMPONENTS: Record<KitBadgeIcon, typeof Sparkles> = {
   star: Star,
   crown: Crown,
 };
+const ALL_ORDER_CATEGORIES: OrderCategory[] = ["classic", "family", "kids_dream", "pet", "superhero", "couple", "historical", "scifi", "anime"];
+
+function getUploadLabel(category: OrderCategory) {
+  return CATEGORY_META[category].photosNeeded > 1 ? "Photos" : "Photo";
+}
+
+function getPhotoLabels(category: OrderCategory) {
+  if (category === "family" || category === "couple") {
+    return ["Personne 1", "Personne 2"];
+  }
+
+  if (category === "kids_dream") {
+    return ["Photo de l'enfant"];
+  }
+
+  if (category === "pet") {
+    return ["Photo de votre animal"];
+  }
+
+  return ["Photo principale"];
+}
+
+function getUploadCopy(category: OrderCategory, productType: ProductType) {
+  if (category === "classic" && productType === "stencil_paint") {
+    return {
+      title: "Importez votre photo",
+      subtitle: "Choisissez la photo que nous transformerons en pochoir a peindre et reveler.",
+    };
+  }
+
+  if (category === "classic" && productType === "glitter_reveal") {
+    return {
+      title: "Importez votre photo",
+      subtitle: "Choisissez la photo que nous preparerons pour votre experience glitter reveal.",
+    };
+  }
+
+  switch (category) {
+    case "family":
+      return {
+        title: "Importez vos 2 photos",
+        subtitle: "Ajoutez les deux photos que l'IA va réunir en une scène unique.",
+      };
+    case "couple":
+      return {
+        title: "Importez vos 2 photos",
+        subtitle: "Ajoutez les deux photos que l'IA transformera en portrait de couple harmonieux.",
+      };
+    case "kids_dream":
+      return {
+        title: "Importez votre photo",
+        subtitle: "Ajoutez la photo de votre enfant et choisissez son rêve.",
+      };
+    case "pet":
+      return {
+        title: "Importez votre photo",
+        subtitle: "Ajoutez la photo de votre animal pour son portrait premium.",
+      };
+    default:
+      return {
+        title: "Importez votre photo",
+        subtitle: "Choisissez la photo que vous souhaitez transformer en peinture par numéros.",
+      };
+  }
+}
 
 /* ─── Section heading helper ─── */
 function SectionHeading({ title, subtitle }: { title: string; subtitle: string }) {
@@ -77,41 +147,61 @@ type StepMetaItem = {
   icon: typeof Sparkles;
 };
 
+export type StudioStepId = "experience" | "subject" | "theme" | "format" | "upload" | "crop" | "ai" | "style" | "confirm";
+
 const STYLE_STEP_LABEL: Record<ProductType, StepMetaItem> = {
   paint_by_numbers: { label: "Style", icon: Palette },
   stencil_paint:    { label: "Détail", icon: Layers },
   glitter_reveal:   { label: "Palette", icon: Sparkles },
 };
 
+export function getWorkflowStepIds(category: OrderCategory, productType: ProductType = "paint_by_numbers"): StudioStepId[] {
+  const steps: StudioStepId[] = ["experience"];
+
+  if (!isManualArtworkProduct(productType)) {
+    steps.push("subject");
+    // Theme is selected inline in the subject step — no separate step
+  }
+
+  steps.push("format", "upload");
+  // "crop" is now a dialog overlay triggered on upload, not a separate step
+
+  if (category !== "classic" && !isManualArtworkProduct(productType)) {
+    steps.push("ai");
+  }
+
+  steps.push("style", "confirm");
+  return steps;
+}
+
+export function getStepNumberForFlow(
+  category: OrderCategory,
+  productType: ProductType,
+  stepId: StudioStepId,
+) {
+  return getWorkflowStepIds(category, productType).indexOf(stepId) + 1;
+}
+
 function getStepMeta(category: OrderCategory, productType: ProductType = "paint_by_numbers"): StepMetaItem[] {
   const styleStep = STYLE_STEP_LABEL[productType];
-  const isAI = category !== "classic";
-  if (!isAI) {
-    return [
-      { label: "Expérience", icon: Sparkles },
-      { label: "Format", icon: Package },
-      { label: "Extras", icon: Gift },
-      { label: "Photo", icon: Upload },
-      { label: "Recadrage", icon: Camera },
-      styleStep,
-      { label: "Commande", icon: CreditCard },
-    ];
-  }
   const aiLabel =
     category === "family"     ? "Fusion"   :
     category === "kids_dream" ? "Magie"    :
     "Portrait";
-  const uploadLabel = category === "family" ? "Photos" : "Photo";
-  // New flow: Upload → Crop → AI → Style → Confirm
-  return [
-    { label: "Expérience", icon: Sparkles },
-    { label: "Format", icon: Package },
-    { label: uploadLabel, icon: Upload },
-    { label: "Recadrage", icon: Camera },
-    { label: aiLabel, icon: Wand2 },
-    styleStep,
-    { label: "Commande", icon: CreditCard },
-  ];
+  const uploadLabel = getUploadLabel(category);
+  const stepConfig: Record<StudioStepId, StepMetaItem> = {
+    experience: { label: "Expérience", icon: Sparkles },
+    subject: { label: "Sujet", icon: User },
+    theme: { label: "Thème", icon: Star },
+    format: { label: "Format", icon: Package },
+    upload: { label: uploadLabel, icon: Upload },
+    crop: { label: "Recadrage", icon: Camera },
+    ai: { label: aiLabel, icon: Wand2 },
+    style: styleStep,
+    confirm: { label: "Commande", icon: CreditCard },
+  };
+
+  return getWorkflowStepIds(category, productType).map((stepId) => stepConfig[stepId]);
 }
 
 
@@ -165,7 +255,7 @@ function StepIndicator({
 }
 
 /* Crops an image to a data URL using canvas */
-const cropImageToDataUrl = (imageUrl: string, crop: Area): Promise<string> =>
+const cropImageToDataUrl = (imageUrl: string, crop: Area, adjustments: ImageAdjustments = { brightness: 100, contrast: 100 }): Promise<string> =>
   new Promise((resolve, reject) => {
     const img = new Image();
     img.crossOrigin = "anonymous";
@@ -174,10 +264,26 @@ const cropImageToDataUrl = (imageUrl: string, crop: Area): Promise<string> =>
       canvas.width = crop.width;
       canvas.height = crop.height;
       const ctx = canvas.getContext("2d")!;
+      ctx.filter = `brightness(${adjustments.brightness}%) contrast(${adjustments.contrast}%)`;
       ctx.drawImage(img, crop.x, crop.y, crop.width, crop.height, 0, 0, crop.width, crop.height);
+      ctx.filter = "none";
       resolve(canvas.toDataURL("image/jpeg", 0.92));
     };
     img.onerror = reject;
+    img.src = imageUrl;
+  });
+
+const getImageFullCrop = (imageUrl: string): Promise<Area> =>
+  new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve({
+      x: 0,
+      y: 0,
+      width: img.naturalWidth || img.width || 2048,
+      height: img.naturalHeight || img.height || 2048,
+    });
+    img.onerror = () => resolve({ x: 0, y: 0, width: 2048, height: 2048 });
     img.src = imageUrl;
   });
 
@@ -189,7 +295,30 @@ const Studio = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const resumeSessionId = searchParams.get("resume")?.trim() || null;
-  const { order, setCategory, setProductType, setPhoto, removePhoto, setCroppedArea, setStyle, setStylePreviewUrl, setSize, setAddOns, setStencilDetailLevel, setCustomStencilDataUrl, setGlitterPalette, setContact, setShipping, setGift, setDreamJob, setCategoryTheme, setAiGeneratedUrl, confirmOrder } = useOrder();
+  const {
+    order,
+    setCategory,
+    setProductType,
+    setPhoto,
+    removePhoto,
+    setPhotoEdit,
+    setCroppedArea,
+    setStyle,
+    setStylePreviewUrl,
+    setSize,
+    setAddOns,
+    setStencilDetailLevel,
+    setCustomStencilDataUrl,
+    setGlitterPalette,
+    setContact,
+    setShipping,
+    setGift,
+    setDreamJob,
+    setCategoryTheme,
+    setAiGeneratedUrl,
+    setImageAdjustments,
+    confirmOrder,
+  } = useOrder();
   const [step, setStep] = useState(1);
   const [processing, setProcessing] = useState(false);
   const [aiGenerating, setAiGenerating] = useState(false);
@@ -199,8 +328,11 @@ const Studio = () => {
   const [animKey, setAnimKey] = useState(0);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [submittingOrder, setSubmittingOrder] = useState(false);
-
-  const [croppedPhotoForAI, setCroppedPhotoForAI] = useState("");
+  const [aiCropDialogOpen, setAiCropDialogOpen] = useState(false);
+  const [classicCropDialogOpen, setClassicCropDialogOpen] = useState(false);
+  const [aiCropQueue, setAiCropQueue] = useState<number[]>([]);
+  const [activeAiCropIndex, setActiveAiCropIndex] = useState<number | null>(null);
+  const [aiCropReturnStep, setAiCropReturnStep] = useState(4);
   const [contactForm, setContactForm] = useState<ContactInfo>(order.contact);
   const [shippingForm, setShippingForm] = useState<ShippingInfo>(order.shipping);
   const [phoneError, setPhoneError] = useState("");
@@ -227,28 +359,56 @@ const Studio = () => {
     if (resumeSessionId) return;
     const cat = searchParams.get("category");
     const product = searchParams.get("product");
+    let nextProductType: ProductType = "paint_by_numbers";
+
     if (product && ["paint_by_numbers", "stencil_paint", "glitter_reveal"].includes(product)) {
-      setProductType(product as ProductType);
+      nextProductType = product as ProductType;
+      setProductType(nextProductType);
       // Manual artwork products are classic-only
       if (product === "stencil_paint" || product === "glitter_reveal") {
         setCategory("classic");
       }
     }
-    if (cat && ["classic", "family", "kids_dream", "pet"].includes(cat)) {
-      setCategory(cat as OrderCategory);
-      setStep(2); // Skip category selection
+    if (cat && ALL_ORDER_CATEGORIES.includes(cat as OrderCategory)) {
+      const nextCategory = isManualArtworkProduct(nextProductType) ? "classic" : (cat as OrderCategory);
+      setCategory(nextCategory);
+      const nextThemes = CATEGORY_THEMES[nextCategory];
+      if (nextThemes?.length) {
+        setCategoryTheme(nextThemes[0].key);
+      }
+      setStep(getStepNumberForFlow(nextCategory, nextProductType, "format"));
     }
-  }, [navigate, resumeSessionId, searchParams, setCategory, setProductType]);
+  }, [navigate, resumeSessionId, searchParams, setCategory, setCategoryTheme, setProductType]);
 
   // Compute step meta based on category and product type
+  const workflowSteps = getWorkflowStepIds(order.category, order.productType);
   const stepMeta = getStepMeta(order.category, order.productType);
   const totalSteps = stepMeta.length;
   const isAICategory = order.category !== "classic";
   const isStencilProduct = order.productType === "stencil_paint" || order.productType === "glitter_reveal";
+  const hasThemeStep = workflowSteps.includes("theme");
+  const currentStepId = workflowSteps[Math.max(0, step - 1)] || "experience";
+  const selectedProductMeta = PRODUCT_TYPE_META[order.productType];
+  const selectedCategoryMeta = CATEGORY_META[order.category];
+  const selectedThemeMeta = CATEGORY_THEMES[order.category]?.find((theme) => theme.key === order.categoryTheme) || null;
+  const studioHeaderTitle =
+    currentStepId === "experience"
+      ? selectedProductMeta.label
+      : currentStepId === "subject"
+      ? "Choix du sujet"
+      : currentStepId === "theme"
+      ? "Direction artistique"
+      : CATEGORY_META[order.category]?.label || "Studio";
 
   // Map logical steps to what we show
-  // For classic: 1=Category, 2=Kit, 3=Upload, 4=Crop, 5=Style, 6=Confirm
-  // For AI: 1=Category, 2=Kit, 3=Upload, 4=Crop, 5=AI, 6=Style, 7=Confirm
+  // Dynamic flow:
+  // Experience -> Subject? -> Theme? -> Format -> Upload -> Crop -> AI? -> Style -> Confirm
+
+  useEffect(() => {
+    if (step > totalSteps) {
+      setStep(totalSteps);
+    }
+  }, [step, totalSteps]);
 
   useEffect(() => {
     void trackFunnelEvent({
@@ -303,14 +463,25 @@ const Studio = () => {
       }
 
       const nextCategory = cart.category;
-      if (nextCategory && ["classic", "family", "kids_dream", "pet"].includes(nextCategory)) {
-        setCategory(nextCategory as OrderCategory);
+      const nextProductType = cart.productType && ["paint_by_numbers", "stencil_paint", "glitter_reveal"].includes(cart.productType)
+        ? (cart.productType as ProductType)
+        : "paint_by_numbers";
+      const resolvedCategory = nextProductType !== "paint_by_numbers"
+        ? "classic"
+        : nextCategory && ALL_ORDER_CATEGORIES.includes(nextCategory as OrderCategory)
+        ? (nextCategory as OrderCategory)
+        : "classic";
+
+      if (resolvedCategory && ALL_ORDER_CATEGORIES.includes(resolvedCategory as OrderCategory)) {
+        const restoredCategory = resolvedCategory as OrderCategory;
+        setCategory(restoredCategory);
+        const restoredThemes = CATEGORY_THEMES[restoredCategory];
+        if (restoredThemes?.length) {
+          setCategoryTheme(restoredThemes[0].key);
+        }
       }
 
-      const nextProductType = cart.productType;
-      if (nextProductType && ["paint_by_numbers", "stencil_paint", "glitter_reveal"].includes(nextProductType)) {
-        setProductType(nextProductType as ProductType);
-      }
+      setProductType(nextProductType);
 
       if (isKitSize(cart.selectedSize)) {
         setSize(cart.selectedSize);
@@ -338,13 +509,16 @@ const Studio = () => {
       setContactForm(recoveredContact);
 
       const shouldRestartFromUpload = Boolean(cart.photoUploaded) || Number(cart.stepReached || 0) >= 3;
+      const uploadStep = getStepNumberForFlow(resolvedCategory, nextProductType, "upload");
+      const formatStep = getStepNumberForFlow(resolvedCategory, nextProductType, "format");
+      const themeStep = getStepNumberForFlow(resolvedCategory, nextProductType, "theme");
       const restoredStep = shouldRestartFromUpload
-        ? 3
+        ? uploadStep
         : cart.selectedSize
-        ? 3
-        : nextCategory
-        ? 2
-        : 1;
+        ? uploadStep
+        : (CATEGORY_THEMES[resolvedCategory]?.length || 0) > 0
+        ? themeStep
+        : formatStep;
 
       setStep(restoredStep);
 
@@ -358,7 +532,7 @@ const Studio = () => {
       void trackFunnelEvent({
         sessionId,
         eventName: "cart_recovered",
-        category: nextCategory,
+        category: resolvedCategory,
         step: restoredStep,
         metadata: {
           source: "resume_link",
@@ -375,7 +549,7 @@ const Studio = () => {
     return () => {
       active = false;
     };
-  }, [navigate, resumeSessionId, sessionId, setCategory, setProductType, setStencilDetailLevel, setGlitterPalette, setContact, setDreamJob, setSize]);
+  }, [navigate, resumeSessionId, sessionId, setCategory, setCategoryTheme, setProductType, setStencilDetailLevel, setGlitterPalette, setContact, setDreamJob, setSize]);
 
   useEffect(() => {
     const photo = getPhoto(order);
@@ -492,32 +666,109 @@ const Studio = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  /* Step 4 (upload): image selected → go to step 5 (crop) */
-  const handleImageSelected = useCallback((dataUrl: string) => {
-    setPhoto(dataUrl, 0);
-    goToStep(5);
-  }, [setPhoto]);
+  const requiredPhotoCount = CATEGORY_META[order.category].photosNeeded;
+  const aiPreviewImages = order.photos.map((_, index) => getPhotoPreviewSource(order.photos, order.photoEdits, index)).filter(Boolean);
 
-  /* Step 4: crop complete → for AI categories: save cropped photo → go to AI step
-                            → for classic: process image → go to style step */
-  const handleCropComplete = useCallback(async (croppedArea: Area) => {
+  const openAiCropFlow = useCallback((indices: number[], returnStep: number) => {
     if (!order.selectedSize) return;
-    setCroppedArea(croppedArea);
 
-    if (isAICategory) {
-      // Crop the original photo and hand it off to AI generation
-      const rawPhoto = getPhoto(order);
-      try {
-        const cropped = await cropImageToDataUrl(rawPhoto, croppedArea);
-        setCroppedPhotoForAI(cropped);
-      } catch {
-        setCroppedPhotoForAI(rawPhoto); // fallback to full photo
-      }
+    const validIndices = indices.filter((index) => Boolean(order.photos[index]));
+    if (validIndices.length === 0) {
       goToStep(getAIStep());
       return;
     }
 
-    // Classic: process image directly after crop
+    setAiCropQueue(validIndices);
+    setActiveAiCropIndex(validIndices[0]);
+    setAiCropReturnStep(returnStep);
+    // Stay on current step — crop dialog opens as an overlay
+    setAiCropDialogOpen(true);
+  }, [order.photos, order.selectedSize]);
+
+  const handleCloseAiCropDialog = useCallback(() => {
+    setAiCropDialogOpen(false);
+    setAiCropQueue([]);
+    setActiveAiCropIndex(null);
+    if (aiCropReturnStep !== step) {
+      goToStep(aiCropReturnStep);
+    }
+  }, [aiCropReturnStep, step]);
+
+  const handleStartAiCropFlow = useCallback(() => {
+    const pending = getPendingPhotoEditIndices(order.photos, requiredPhotoCount, order.photoEdits);
+    openAiCropFlow(
+      pending.length > 0 ? pending : Array.from({ length: requiredPhotoCount }, (_, index) => index),
+      getUploadStep(),
+    );
+  }, [openAiCropFlow, order.photoEdits, order.photos, requiredPhotoCount]);
+
+  const handleEditAiPhoto = useCallback((index: number, returnStep = getUploadStep()) => {
+    openAiCropFlow([index], returnStep);
+  }, [openAiCropFlow]);
+
+  /* Upload: image selected → open crop dialog */
+  const handleImageSelected = useCallback((dataUrl: string) => {
+    setPhoto(dataUrl, 0);
+    setClassicCropDialogOpen(true);
+  }, [setPhoto]);
+
+  const handleAiCropComplete = useCallback(async (croppedArea: Area, adjustments: ImageAdjustments) => {
+    if (activeAiCropIndex == null) return;
+
+    const sourcePhoto = order.photos[activeAiCropIndex];
+    if (!sourcePhoto) return;
+
+    try {
+      const croppedDataUrl = await cropImageToDataUrl(sourcePhoto, croppedArea, adjustments);
+      setPhotoEdit(activeAiCropIndex, {
+        crop: croppedArea,
+        adjustments,
+        croppedDataUrl,
+      });
+    } catch {
+      setPhotoEdit(activeAiCropIndex, {
+        crop: croppedArea,
+        adjustments,
+        croppedDataUrl: sourcePhoto,
+      });
+    }
+
+    const remainingQueue = aiCropQueue.filter((index) => index !== activeAiCropIndex);
+    if (remainingQueue.length > 0) {
+      setAiCropQueue(remainingQueue);
+      setActiveAiCropIndex(remainingQueue[0]);
+      setAiCropDialogOpen(true);
+      return;
+    }
+
+    setAiCropDialogOpen(false);
+    setAiCropQueue([]);
+    setActiveAiCropIndex(null);
+
+    void trackFunnelEvent({
+      sessionId,
+      eventName: "crop_completed",
+      category: order.category,
+      step: getUploadStep(),
+      metadata: {
+        selectedSize: order.selectedSize,
+        fromAi: true,
+        productType: order.productType,
+        photoCount: requiredPhotoCount,
+      },
+    });
+
+    goToStep(getAIStep());
+  }, [activeAiCropIndex, aiCropQueue, order.category, order.photos, order.productType, order.selectedSize, requiredPhotoCount, sessionId, setPhotoEdit]);
+
+  /* Crop complete → close dialog, process image, go to style step */
+  const handleCropComplete = useCallback(async (croppedArea: Area, adjustments: ImageAdjustments) => {
+    setClassicCropDialogOpen(false);
+    if (!order.selectedSize) return;
+    setCroppedArea(croppedArea);
+    setImageAdjustments(adjustments);
+
+    // Classic/stencil: process image directly after crop
     setProcessing(true);
     const photo = getPhoto(order);
     const imgKitSize = resolveProcessingKitSize(order.selectedSize);
@@ -526,7 +777,7 @@ const Studio = () => {
       if (isStencilProduct) {
         const detailLevels: StencilDetailLevel[] = ["bold", "medium", "fine"];
         const results = await Promise.all(
-          detailLevels.map((level) => processStencilImage(photo, croppedArea, imgKitSize, level))
+          detailLevels.map((level) => processStencilImage(photo, croppedArea, imgKitSize, level, adjustments))
         );
         const previewMap: Partial<Record<StencilDetailLevel, string>> = {};
         results.forEach((r) => { previewMap[r.detailLevel] = r.dataUrl; });
@@ -535,7 +786,7 @@ const Studio = () => {
         if (!order.stencilDetailLevel) setStencilDetailLevel(activeDetailLevel);
         setStylePreviewUrl(previewMap[activeDetailLevel] || results[0]?.dataUrl || "");
       } else {
-        const results = await processImage(photo, croppedArea, imgKitSize);
+        const results = await processImage(photo, croppedArea, imgKitSize, adjustments);
         const allPreviews: typeof previews = orderStyleResults(results).map((result) => ({
           style: result.styleKey,
           results: [result],
@@ -557,7 +808,7 @@ const Studio = () => {
       console.error("Processing failed:", err);
       setProcessing(false);
     }
-  }, [order.photos, order.selectedSize, order.category, order.productType, order.stencilDetailLevel, isStencilProduct, isAICategory, setCroppedArea, setStencilDetailLevel, setStylePreviewUrl, setCroppedPhotoForAI]);
+  }, [order.photos, order.selectedSize, order.category, order.productType, order.stencilDetailLevel, isStencilProduct, setCroppedArea, setImageAdjustments, setStencilDetailLevel, setStylePreviewUrl]);
 
   /* Custom stencil upload handler */
   const handleCustomStencilUpload = useCallback(async (file: File) => {
@@ -586,15 +837,18 @@ const Studio = () => {
   /* AI Generation — uses cropped photo, then auto-processes result */
   const handleAIGenerate = async () => {
     if (!order.selectedSize) return;
+    const images = buildAiInputImages(order.photos, order.photoEdits);
+    if (images.length < requiredPhotoCount) {
+      toast({
+        title: "Recadrage requis",
+        description: "Recadrez chaque photo avant de lancer la génération IA.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setAiGenerating(true);
     try {
-      // Use the cropped photo as primary input; for multi-photo categories (family/couple)
-      // include the 2nd raw photo as well
-      const primaryImage = croppedPhotoForAI || order.photos[0];
-      const images = order.photos.length > 1
-        ? [primaryImage, order.photos[1]].filter(Boolean)
-        : [primaryImage].filter(Boolean);
-
       void trackFunnelEvent({
         sessionId,
         eventName: "ai_generation_requested",
@@ -640,16 +894,17 @@ const Studio = () => {
       });
 
       // Auto-process the AI result so style cards are ready.
-      // Use 1024×1024 full-image crop (GeminiGen always returns 1:1 square images).
+      const fullCrop = await getImageFullCrop(imageUrl);
+      setCroppedArea(fullCrop);
+      setImageAdjustments({ brightness: 100, contrast: 100 });
       setAiGenerating(false);
       setProcessing(true);
       const imgKitSize = resolveProcessingKitSize(order.selectedSize);
-      const fullCrop: Area = { x: 0, y: 0, width: 2048, height: 2048 };
 
       if (isStencilProduct) {
         const detailLevels: StencilDetailLevel[] = ["bold", "medium", "fine"];
         const results = await Promise.all(
-          detailLevels.map((level) => processStencilImage(imageUrl, fullCrop, imgKitSize, level))
+          detailLevels.map((level) => processStencilImage(imageUrl, fullCrop, imgKitSize, level, { brightness: 100, contrast: 100 }))
         );
         const previewMap: Partial<Record<StencilDetailLevel, string>> = {};
         results.forEach((r) => { previewMap[r.detailLevel] = r.dataUrl; });
@@ -658,7 +913,7 @@ const Studio = () => {
         if (!order.stencilDetailLevel) setStencilDetailLevel(activeLevel);
         setStylePreviewUrl(previewMap[activeLevel] || results[0]?.dataUrl || "");
       } else {
-        const results = await processImage(imageUrl, fullCrop, imgKitSize);
+        const results = await processImage(imageUrl, fullCrop, imgKitSize, { brightness: 100, contrast: 100 });
         const allPreviews: typeof previews = orderStyleResults(results).map((result) => ({
           style: result.styleKey,
           results: [result],
@@ -671,7 +926,7 @@ const Studio = () => {
       toast({ title: "Image IA générée ✨", description: "Choisissez votre style artistique." });
       goToStep(getStyleStep());
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : "unknown_error";
+      const errorMsg = getFriendlyAIGenerationError(err instanceof Error ? err.message : "unknown_error");
       console.error("AI generation failed:", err);
       setAiGenerating(false);
       setProcessing(false);
@@ -682,7 +937,13 @@ const Studio = () => {
         step: getAIStep(),
         metadata: { message: errorMsg },
       });
-      toast({ title: "Erreur", description: errorMsg === "unknown_error" ? "La génération IA a échoué. Réessayez." : errorMsg, variant: "destructive" });
+      toast({
+        title: "Erreur",
+        description: errorMsg === "unknown_error"
+          ? "La génération IA a échoué. Réessayez."
+          : errorMsg,
+        variant: "destructive",
+      });
     }
   };
 
@@ -787,18 +1048,24 @@ const Studio = () => {
     ? "animate-[slide-in-right_0.35s_ease-out]"
     : "animate-[slide-in-left_0.35s_ease-out]";
 
-  // Classic: 1=Cat, 2=Kit, 3=Upload, 4=Crop, 5=Style, 6=Confirm
-  // AI:      1=Cat, 2=Kit, 3=Upload, 4=Crop, 5=AI,    6=Style, 7=Confirm
-  const getKitStep = () => 2;
-  const getUploadStep = () => 3;
-  const getCropStep = () => 4; // always 4 — crop before AI
-  const getAIStep = () => 5;   // AI only, always after crop
-  const getStyleStep = () => isAICategory ? 6 : 5;
-  const getConfirmStep = () => isAICategory ? 7 : 6;
+  const getExperienceStep = () => getStepNumberForFlow(order.category, order.productType, "experience");
+  const getSubjectStep = () => getStepNumberForFlow(order.category, order.productType, "subject");
+  const getThemeStep = () => getStepNumberForFlow(order.category, order.productType, "theme");
+  const getFormatStep = () => getStepNumberForFlow(order.category, order.productType, "format");
+  const getUploadStep = () => getStepNumberForFlow(order.category, order.productType, "upload");
+  const getCropStep = () => getStepNumberForFlow(order.category, order.productType, "crop");
+  const getAIStep = () => getStepNumberForFlow(order.category, order.productType, "ai");
+  const getStyleStep = () => getStepNumberForFlow(order.category, order.productType, "style");
+  const getConfirmStep = () => getStepNumberForFlow(order.category, order.productType, "confirm");
 
 
   const photo = getPhoto(order);
   const photoForProcessing = order.aiGeneratedUrl || photo;
+  const uploadCopy = getUploadCopy(order.category, order.productType);
+  const activeAiCropImage = activeAiCropIndex != null ? order.photos[activeAiCropIndex] || "" : "";
+  const activeAiCropEdit = activeAiCropIndex != null ? order.photoEdits[activeAiCropIndex] || null : null;
+  const aiCropPendingCount = getPendingPhotoEditIndices(order.photos, requiredPhotoCount, order.photoEdits).length;
+  const allAiPhotosCropped = aiCropPendingCount === 0 && order.photos.filter(Boolean).length >= requiredPhotoCount;
   const hasHiddenSelectedKit = Boolean(order.selectedSize && !isPublicKit(order.selectedSize));
   const hiddenSelectedKit = hasHiddenSelectedKit && order.selectedSize
     ? getKitConfig(order.selectedSize)
@@ -827,11 +1094,11 @@ const Studio = () => {
 
         {/* Sticky header */}
         <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-xl border-b border-black/[0.04]">
-          <div className="max-w-3xl mx-auto px-6 py-5 lg:px-8">
+          <div className="max-w-4xl mx-auto px-6 py-5 lg:px-8">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground mb-1">Studio Helma</p>
-                <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-foreground">{CATEGORY_META[order.category]?.label || "Studio"}</h1>
+                <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-foreground">{studioHeaderTitle}</h1>
               </div>
               {isAICategory && (
                 <span className="inline-flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-full bg-blue-50/50 text-blue-600 border border-blue-100/50">
@@ -870,53 +1137,252 @@ const Studio = () => {
           </div>
         </div>
 
-        <div className="max-w-3xl mx-auto px-6 lg:px-8 pb-32 pt-8">
+        <div className="max-w-4xl mx-auto px-6 lg:px-8 pb-32 pt-8">
             <div key={animKey} className={slideClass}>
 
               {/* ═══════════════════════════════════════════
-                  STEP 1: Choose Category
+                  STEP 1: Technique
                  ═══════════════════════════════════════════ */}
-              {step === 1 && (
-                <div className="space-y-10">
-                  <div>
-                    <SectionHeading
-                      title="Choisissez votre technique"
-                      subtitle="Trois façons uniques de transformer votre photo en œuvre d'art."
-                    />
+              {step === getExperienceStep() && (
+                <div className="space-y-6">
+                  <div className="overflow-hidden rounded-[34px] border border-black/[0.06] bg-[linear-gradient(135deg,rgba(248,244,235,0.92),rgba(255,255,255,0.98))] px-5 py-6 shadow-[0_20px_50px_-30px_rgba(0,0,0,0.2)] sm:px-7 sm:py-7">
+                    <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="max-w-xl">
+                        <span className="inline-flex items-center rounded-full border border-primary/15 bg-white/75 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary/80">
+                          Étape 1
+                        </span>
+                        <h2
+                          className="mt-4 text-[30px] font-bold leading-tight text-foreground sm:text-[38px]"
+                          style={{ fontFamily: "'Playfair Display', serif" }}
+                        >
+                          Choisissez l'expérience Helma
+                        </h2>
+                        <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-[15px]">
+                          Commencez par le type de création que vous voulez vivre. Nous vous guiderons ensuite vers le bon sujet, le bon thème et le bon format.
+                        </p>
+                      </div>
+
+                      <div className="grid gap-2 sm:grid-cols-2 lg:w-[340px]">
+                        <div className="rounded-2xl border border-white/80 bg-white/85 px-4 py-3 shadow-sm backdrop-blur">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                            Technique
+                          </p>
+                          <p className="mt-1 text-sm font-semibold text-foreground">
+                            {selectedProductMeta.label}
+                          </p>
+                        </div>
+                        <div className="rounded-2xl border border-white/80 bg-white/85 px-4 py-3 shadow-sm backdrop-blur">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                            Parcours
+                          </p>
+                          <p className="mt-1 text-sm font-semibold text-foreground">
+                            {isManualArtworkProduct(order.productType) ? "Rapide et direct" : "Sujet puis ambiance"}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-[30px] border border-black/[0.06] bg-white p-5 shadow-[0_16px_45px_-32px_rgba(0,0,0,0.3)] sm:p-6">
+                    <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                      <SectionHeading
+                        title="Choisissez votre technique"
+                        subtitle="Trois expériences différentes, avec une même qualité Helma."
+                      />
+                      <Badge variant="secondary" className="w-fit rounded-full px-3 py-1 text-xs">
+                        {selectedProductMeta.shortDescription}
+                      </Badge>
+                    </div>
                     <ProductTypePicker selected={order.productType} onSelect={(type) => {
                       setProductType(type);
-                      // Manual artwork products are classic-only
                       if (isManualArtworkProduct(type)) {
                         setCategory("classic");
                       }
                     }} />
                   </div>
 
-                  {!isManualArtworkProduct(order.productType) && (
-                    <div>
-                      <SectionHeading
-                        title="Choisissez votre sujet"
-                        subtitle="Qui sera au cœur de votre création ?"
-                      />
-                      <CategorySelector
-                        selected={order.category}
-                        onSelect={(cat) => {
-                          setCategory(cat);
-                          const themes = CATEGORY_THEMES[cat];
-                          setCategoryTheme(themes?.[0]?.key || "");
-                        }}
-                      />
-                      <CategoryThemePicker
-                        category={order.category}
-                        selected={order.categoryTheme}
-                        onSelect={setCategoryTheme}
-                      />
-                    </div>
-                  )}
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    {[
+                      "Parcours guidé pas à pas",
+                      "Qualité premium sur chaque support",
+                      isManualArtworkProduct(order.productType) ? "Portrait classique directement optimisé" : "Sujet et ambiance personnalisables",
+                    ].map((point) => (
+                      <div key={point} className="rounded-2xl border border-black/[0.05] bg-[#FCFCFB] px-4 py-3 text-sm text-foreground/80">
+                        {point}
+                      </div>
+                    ))}
+                  </div>
 
                   <div className="flex justify-end">
                     <Button
-                      onClick={() => goToStep(2)}
+                      onClick={() => goToStep(isManualArtworkProduct(order.productType) ? getFormatStep() : getSubjectStep())}
+                      className="gap-2 btn-premium text-primary-foreground border-0 px-8"
+                      size="lg"
+                    >
+                      Continuer <NextIcon className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {!isManualArtworkProduct(order.productType) && step === getSubjectStep() && (
+                <div className="space-y-6">
+                  <div className="overflow-hidden rounded-[34px] border border-black/[0.06] bg-[linear-gradient(135deg,rgba(255,248,240,0.95),rgba(255,255,255,0.98))] px-5 py-6 shadow-[0_20px_50px_-30px_rgba(0,0,0,0.2)] sm:px-7 sm:py-7">
+                    <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="max-w-xl">
+                        <span className="inline-flex items-center rounded-full border border-primary/15 bg-white/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary/80">
+                          Étape 2
+                        </span>
+                        <h2
+                          className="mt-4 text-[30px] font-bold leading-tight text-foreground sm:text-[38px]"
+                          style={{ fontFamily: "'Playfair Display', serif" }}
+                        >
+                          Choisissez le sujet de votre œuvre
+                        </h2>
+                        <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-[15px]">
+                          Sélectionnez le type de portrait à créer. Cette étape définit la composition, le nombre de photos et l'esprit général de la scène.
+                        </p>
+                      </div>
+
+                      <div className="rounded-[28px] border border-white/90 bg-white/90 p-5 shadow-sm lg:w-[320px]">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                          Sélection actuelle
+                        </p>
+                        <p className="mt-2 text-lg font-semibold text-foreground" style={{ fontFamily: "'Playfair Display', serif" }}>
+                          {selectedCategoryMeta.label}
+                        </p>
+                        <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                          {selectedCategoryMeta.description}
+                        </p>
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary">
+                            {selectedCategoryMeta.photosNeeded > 1 ? "2 photos requises" : "1 photo requise"}
+                          </span>
+                          {selectedThemeMeta && (
+                            <span className="rounded-full bg-black/[0.04] px-2.5 py-1 text-[11px] font-semibold text-foreground/70">
+                              {selectedThemeMeta.icon} {selectedThemeMeta.label}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-[30px] border border-black/[0.06] bg-white p-5 shadow-[0_16px_45px_-32px_rgba(0,0,0,0.3)] sm:p-6">
+                    <SectionHeading
+                      title="Quel portrait voulez-vous créer ?"
+                      subtitle="Choisissez le sujet — vous pourrez personnaliser l'ambiance juste en dessous."
+                    />
+                    <CategorySelector
+                      selected={order.category}
+                      onSelect={(cat) => {
+                        setCategory(cat);
+                        const themes = CATEGORY_THEMES[cat];
+                        setCategoryTheme(themes?.[0]?.key || "");
+                      }}
+                    />
+
+                    {/* Inline theme chips */}
+                    {(CATEGORY_THEMES[order.category]?.length || 0) > 0 && (
+                      <div className="mt-5 pt-5 border-t border-black/[0.05] animate-fade-in">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-muted-foreground mb-3">
+                          Personnaliser l'ambiance
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {CATEGORY_THEMES[order.category]!.map((theme) => {
+                            const isActive = order.categoryTheme === theme.key;
+                            return (
+                              <button
+                                key={theme.key}
+                                type="button"
+                                onClick={() => setCategoryTheme(theme.key)}
+                                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[13px] font-medium transition-all duration-150 ${
+                                  isActive
+                                    ? "border-primary/30 bg-primary/10 text-primary"
+                                    : "border-black/[0.07] bg-white text-foreground/70 hover:border-black/12 hover:text-foreground hover:bg-gray-50"
+                                }`}
+                              >
+                                <span>{theme.icon}</span>
+                                <span>{theme.label}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <Button variant="outline" onClick={() => goToStep(getExperienceStep())} className="gap-2">
+                      <BackIcon className="h-4 w-4" /> Retour
+                    </Button>
+                    <Button
+                      onClick={() => goToStep(getFormatStep())}
+                      className="gap-2 btn-premium text-primary-foreground border-0 px-8"
+                      size="lg"
+                    >
+                      Continuer <NextIcon className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {hasThemeStep && step === getThemeStep() && (
+                <div className="space-y-6">
+                  <div className="overflow-hidden rounded-[34px] border border-black/[0.06] bg-[linear-gradient(135deg,rgba(247,243,255,0.92),rgba(255,255,255,0.98))] px-5 py-6 shadow-[0_20px_50px_-30px_rgba(0,0,0,0.2)] sm:px-7 sm:py-7">
+                    <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="max-w-xl">
+                        <span className="inline-flex items-center rounded-full border border-primary/15 bg-white/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary/80">
+                          Étape 3
+                        </span>
+                        <h2
+                          className="mt-4 text-[30px] font-bold leading-tight text-foreground sm:text-[38px]"
+                          style={{ fontFamily: "'Playfair Display', serif" }}
+                        >
+                          Définissez l'ambiance visuelle
+                        </h2>
+                        <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-[15px]">
+                          Le thème influence l'arrière-plan, la lumière et l'univers du portrait. Choisissez une direction claire avant de passer au format.
+                        </p>
+                      </div>
+
+                      <div className="rounded-[28px] border border-white/90 bg-white/90 p-5 shadow-sm lg:w-[320px]">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                          Sujet retenu
+                        </p>
+                        <p className="mt-2 text-lg font-semibold text-foreground" style={{ fontFamily: "'Playfair Display', serif" }}>
+                          {selectedCategoryMeta.label}
+                        </p>
+                        <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                          {selectedThemeMeta ? `${selectedThemeMeta.icon} ${selectedThemeMeta.label}` : "Choisissez un thème pour continuer."}
+                        </p>
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary">
+                            Portrait optimisé pour la génération IA
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-[30px] border border-black/[0.06] bg-white p-5 shadow-[0_16px_45px_-32px_rgba(0,0,0,0.3)] sm:p-6">
+                    <SectionHeading
+                      title="Personnalisez votre thème"
+                      subtitle="Une ambiance forte fonctionne mieux quand elle reste lisible, élégante et centrée sur le sujet."
+                    />
+                    <CategoryThemePicker
+                      category={order.category}
+                      selected={order.categoryTheme}
+                      onSelect={setCategoryTheme}
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <Button variant="outline" onClick={() => goToStep(getSubjectStep())} className="gap-2">
+                      <BackIcon className="h-4 w-4" /> Retour
+                    </Button>
+                    <Button
+                      onClick={() => goToStep(getFormatStep())}
                       className="gap-2 btn-premium text-primary-foreground border-0 px-8"
                       size="lg"
                     >
@@ -927,9 +1393,9 @@ const Studio = () => {
               )}
 
               {/* ═══════════════════════════════════════════
-                  STEP 2: Choose Kit Size
+                  Format
                  ═══════════════════════════════════════════ */}
-              {step === getKitStep() && (
+              {step === getFormatStep() && (
                 <div className="space-y-8">
                   <SectionHeading
                     title="Choisissez votre format"
@@ -1070,7 +1536,11 @@ const Studio = () => {
                   </div>
 
                   <div className="flex justify-between">
-                    <Button variant="outline" onClick={() => goToStep(1)} className="gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => goToStep(!isManualArtworkProduct(order.productType) ? getSubjectStep() : getExperienceStep())}
+                      className="gap-2"
+                    >
                       <BackIcon className="h-4 w-4" /> Retour
                     </Button>
                     <Button
@@ -1091,27 +1561,23 @@ const Studio = () => {
               {step === getUploadStep() && !processing && (
                 <div>
                   <SectionHeading
-                    title={order.category === "family" ? "Importez vos 2 photos" : "Importez votre photo"}
-                    subtitle={
-                      order.category === "family"
-                        ? "Ajoutez les deux photos que l'IA va réunir en une scène unique."
-                        : order.category === "kids_dream"
-                        ? "Ajoutez la photo de votre enfant et choisissez son rêve."
-                        : order.category === "pet"
-                        ? "Ajoutez la photo de votre animal pour son portrait royal."
-                        : "Choisissez la photo que vous souhaitez transformer en peinture par numéros."
-                    }
+                    title={uploadCopy.title}
+                    subtitle={uploadCopy.subtitle}
                   />
 
                   {order.category === "classic" ? (
                     /* Classic: single upload */
                     <>
                       {photo ? (
-                        <div className="space-y-8">
-                          {/* Desktop users see photo in left pane, Mobile users see it here */}
-                          <div className="lg:hidden overflow-hidden rounded-3xl border border-black/[0.04] shadow-[0_8px_30px_-10px_rgba(0,0,0,0.08)] bg-white p-2 mx-auto">
+                        <div className="space-y-6">
+                          <div className="overflow-hidden rounded-3xl border border-black/[0.04] shadow-[0_8px_30px_-10px_rgba(0,0,0,0.08)] bg-white p-2 max-w-sm mx-auto">
                             <div className="rounded-2xl overflow-hidden bg-[#FAFAFA] relative">
-                               <img src={photo} alt="Uploaded" className="w-full max-h-96 object-contain animate-scale-in" />
+                              <img src={photo} alt="Uploaded" className="w-full max-h-72 object-contain animate-scale-in" />
+                              {order.croppedArea && (
+                                <span className="absolute top-3 left-3 rounded-full bg-green-500 px-2.5 py-1 text-[11px] font-semibold text-white">
+                                  Recadrée ✓
+                                </span>
+                              )}
                             </div>
                           </div>
                           <div className="flex flex-col sm:flex-row gap-3 justify-center">
@@ -1119,8 +1585,9 @@ const Studio = () => {
                               <Camera className="h-4 w-4" />
                               Changer la photo
                             </Button>
-                            <Button onClick={() => goToStep(getCropStep())} className="gap-2 btn-premium text-primary-foreground border-0 px-8">
-                              Continuer <NextIcon className="h-4 w-4" />
+                            <Button variant="outline" onClick={() => setClassicCropDialogOpen(true)} className="gap-2">
+                              <Crop className="h-4 w-4" />
+                              {order.croppedArea ? "Modifier le recadrage" : "Recadrer la photo"}
                             </Button>
                           </div>
                         </div>
@@ -1135,16 +1602,14 @@ const Studio = () => {
                     <div className="space-y-6">
                       <MultiUploadZone
                         photos={order.photos}
-                        maxPhotos={CATEGORY_META[order.category].photosNeeded}
-                        onPhotoAdded={(dataUrl, idx) => setPhoto(dataUrl, idx)}
+                        maxPhotos={requiredPhotoCount}
+                        onPhotoAdded={(dataUrl, idx) => {
+                          setPhoto(dataUrl, idx);
+                          // Auto-open crop dialog immediately after photo is added
+                          setTimeout(() => openAiCropFlow([idx], getUploadStep()), 80);
+                        }}
                         onPhotoRemoved={(idx) => removePhoto(idx)}
-                        labels={
-                          order.category === "family"
-                            ? ["Personne 1", "Personne 2"]
-                            : order.category === "kids_dream"
-                            ? ["Photo de l'enfant"]
-                            : ["Photo de votre animal"]
-                        }
+                        labels={getPhotoLabels(order.category)}
                       />
 
                       {/* Dream job picker for kids_dream */}
@@ -1161,20 +1626,26 @@ const Studio = () => {
                   )}
 
                   <div className="mt-8 flex justify-between">
-                    <Button variant="outline" onClick={() => goToStep(getKitStep())} className="gap-2">
+                    <Button variant="outline" onClick={() => goToStep(getFormatStep())} className="gap-2">
                       <BackIcon className="h-4 w-4" /> Retour
                     </Button>
                     {order.category !== "classic" && (
                       <Button
-                        onClick={() => goToStep(getCropStep())}
+                        onClick={() => {
+                          if (allAiPhotosCropped) {
+                            goToStep(getAIStep());
+                          } else {
+                            handleStartAiCropFlow();
+                          }
+                        }}
                         disabled={
-                          order.photos.filter(Boolean).length < CATEGORY_META[order.category].photosNeeded ||
+                          order.photos.filter(Boolean).length < requiredPhotoCount ||
                           (order.category === "kids_dream" && !order.dreamJob)
                         }
                         className="gap-2 btn-premium text-primary-foreground border-0 px-8"
                         size="lg"
                       >
-                        Continuer <NextIcon className="h-4 w-4" />
+                        {allAiPhotosCropped ? <>Continuer <NextIcon className="h-4 w-4" /></> : <>Recadrer les photos <Camera className="h-4 w-4" /></>}
                       </Button>
                     )}
                   </div>
@@ -1195,68 +1666,72 @@ const Studio = () => {
                     subtitle="L'IA Helma va transformer votre photo recadrée en une œuvre d'art unique."
                   />
 
-                  {/* Cropped photo preview */}
-                  {croppedPhotoForAI && (
-                    <div className="flex justify-center gap-4">
-                      <div className="relative">
-                        <div className="w-36 h-36 rounded-xl overflow-hidden border-2 border-primary/30 shadow-lg">
-                          <img src={croppedPhotoForAI} alt="Photo recadrée" className="w-full h-full object-cover" />
+                  {aiPreviewImages.length > 0 && (
+                    <div className={`grid gap-4 ${aiPreviewImages.length > 1 ? "sm:grid-cols-2" : "max-w-sm mx-auto"}`}>
+                      {aiPreviewImages.map((imageSrc, index) => (
+                        <div key={`${imageSrc}-${index}`} className="rounded-2xl border border-black/[0.06] bg-white p-3 shadow-sm">
+                          <div className="relative overflow-hidden rounded-xl border border-primary/15">
+                            <img src={imageSrc} alt={getPhotoLabels(order.category)[index] || `Photo ${index + 1}`} className="aspect-square w-full object-cover" />
+                            <span className="absolute left-3 top-3 rounded-full bg-primary px-2.5 py-1 text-[11px] font-semibold text-primary-foreground">
+                              Recadree
+                            </span>
+                          </div>
+                          <div className="mt-3 flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold text-foreground">{getPhotoLabels(order.category)[index] || `Photo ${index + 1}`}</p>
+                              <p className="text-xs text-muted-foreground">Cadre optimise pour un meilleur rendu final.</p>
+                            </div>
+                            <Button variant="outline" size="sm" onClick={() => handleEditAiPhoto(index)}>
+                              Modifier
+                            </Button>
+                          </div>
                         </div>
-                        <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 text-[10px] font-medium bg-primary text-primary-foreground px-2 py-0.5 rounded-full whitespace-nowrap">Recadrée</span>
-                      </div>
-                      {order.photos[1] && (
-                        <div className="w-36 h-36 rounded-xl overflow-hidden border-2 border-border shadow-md">
-                          <img src={order.photos[1]} alt="Photo 2" className="w-full h-full object-cover" />
-                        </div>
-                      )}
+                      ))}
                     </div>
                   )}
 
-                  <div className="flex flex-col items-center gap-4">
-                    <Button
-                      onClick={handleAIGenerate}
-                      disabled={aiGenerating}
-                      className="gap-2 btn-premium text-primary-foreground border-0 px-10 h-14 text-base font-semibold shadow-lg"
-                      size="lg"
-                    >
-                      {aiGenerating ? (
-                        <>
-                          <Loader2 className="h-5 w-5 animate-spin" />
-                          Génération en cours...
-                        </>
-                      ) : (
-                        <>
-                          <Wand2 className="h-5 w-5" />
-                          Générer avec l'IA
-                        </>
-                      )}
-                    </Button>
-                    {aiGenerating && (
-                      <p className="text-xs text-muted-foreground animate-pulse">
-                        Cela peut prendre 20-40 secondes...
+                  {aiGenerating ? (
+                    <AIGenerationLoadingPanel
+                      photoUrls={aiPreviewImages}
+                      categoryLabel={CATEGORY_META[order.category]?.label || "portrait"}
+                    />
+                  ) : (
+                    <div className="flex flex-col items-center gap-4">
+                      <Button
+                        onClick={handleAIGenerate}
+                        disabled={!allAiPhotosCropped}
+                        className="gap-2 btn-premium text-primary-foreground border-0 px-10 h-14 text-base font-semibold shadow-lg"
+                        size="lg"
+                      >
+                        <Wand2 className="h-5 w-5" />
+                        Générer avec l'IA
+                      </Button>
+                      <p className="text-xs text-muted-foreground">
+                        Cela peut prendre 30-120 secondes selon la charge du fournisseur.
                       </p>
-                    )}
-                  </div>
+                    </div>
+                  )}
 
                   <div className="flex justify-start">
-                    <Button variant="outline" onClick={() => goToStep(getCropStep())} className="gap-2">
+                    <Button variant="outline" onClick={() => goToStep(getCropStep())} className="gap-2" disabled={aiGenerating}>
                       <BackIcon className="h-4 w-4" /> Retour
                     </Button>
                   </div>
+
+                  {!aiGenerating && (
+                    <div className="rounded-2xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-sm text-amber-900">
+                      Si la generation depasse environ 2 minutes, c'est souvent le fournisseur IA qui est lent ou une ancienne version de la fonction edge qui est encore deployee. Dans ce cas, relancez apres verification du deploiement.
+                    </div>
+                  )}
                 </div>
               )}
 
               {/* ═══════════════════════════════════════════
                   CROP Step
                  ═══════════════════════════════════════════ */}
-              {step === getCropStep() && !processing && order.selectedSize && (
-                <CropScreen
-                  imageSrc={photo}
-                  kitSize={resolveProcessingKitSize(order.selectedSize)}
-                  onCropComplete={handleCropComplete}
-                  onBack={() => goToStep(getUploadStep())}
-                />
-              )}
+              {/* AI crop is now a dialog — no inline step */}
+
+              {/* Classic crop is now a dialog — no inline step */}
 
               {processing && <ProcessingScreen />}
 
@@ -1561,7 +2036,7 @@ const Studio = () => {
                               <span className="text-muted-foreground">Taille</span>
                               <div className="flex items-center gap-2">
                                 <span className="font-medium">{getKitDisplayLabel(order.selectedSize)}</span>
-                                <button onClick={() => goToStep(getKitStep())} className="text-primary hover:text-primary/70 transition-colors"><Edit3 className="h-3 w-3" /></button>
+                                <button onClick={() => goToStep(getFormatStep())} className="text-primary hover:text-primary/70 transition-colors"><Edit3 className="h-3 w-3" /></button>
                               </div>
                             </div>
                             <div className="flex justify-between text-sm">
@@ -1680,6 +2155,52 @@ const Studio = () => {
             </div>
           </div>
         </div>
+      {order.selectedSize && activeAiCropIndex != null && activeAiCropImage && (
+        <AiPhotoCropDialog
+          open={aiCropDialogOpen}
+          imageSrc={activeAiCropImage}
+          kitSize={resolveProcessingKitSize(order.selectedSize)}
+          photoIndex={activeAiCropIndex}
+          totalPhotos={requiredPhotoCount}
+          label={getPhotoLabels(order.category)[activeAiCropIndex] || `Photo ${activeAiCropIndex + 1}`}
+          initialAdjustments={activeAiCropEdit?.adjustments}
+          onOpenChange={(open) => {
+            if (!open) {
+              handleCloseAiCropDialog();
+            }
+          }}
+          onBack={handleCloseAiCropDialog}
+          onCropComplete={handleAiCropComplete}
+        />
+      )}
+      {/* Classic / stencil crop dialog */}
+      {photo && order.selectedSize && (
+        <Dialog open={classicCropDialogOpen} onOpenChange={(open) => {
+          setClassicCropDialogOpen(open);
+        }}>
+          <DialogContent
+            className="max-w-[min(100vw-1.5rem,900px)] p-0 overflow-hidden gap-0 rounded-[24px] border-black/[0.08]"
+            onInteractOutside={(e) => e.preventDefault()}
+          >
+            <div className="flex items-center gap-3 border-b border-black/[0.06] px-5 py-4">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+                <Camera className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground mb-0.5">Recadrage</p>
+                <p className="text-[15px] font-bold text-foreground leading-tight">Ajustez votre photo</p>
+              </div>
+            </div>
+            <CropScreen
+              imageSrc={photo}
+              kitSize={resolveProcessingKitSize(order.selectedSize)}
+              onCropComplete={handleCropComplete}
+              onBack={() => setClassicCropDialogOpen(false)}
+              hideKitBadge
+            />
+          </DialogContent>
+        </Dialog>
+      )}
       <SaveProgressModal open={showSaveModal} onOpenChange={setShowSaveModal} step={step} />
     </div>
   );

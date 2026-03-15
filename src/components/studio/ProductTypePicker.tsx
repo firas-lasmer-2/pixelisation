@@ -38,59 +38,78 @@ export function ProductTypePicker({ selected, onSelect, products }: ProductTypeP
     : PRODUCT_CARDS;
 
   return (
-    <div className={`grid gap-4 ${visibleCards.length === 2 ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
+    <div className={`grid gap-3 ${visibleCards.length === 2 ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
       {visibleCards.map((card, idx) => {
         const meta = PRODUCT_TYPE_META[card.key];
         const isSelected = selected === card.key;
         const Icon = card.Icon;
 
         return (
-          <div
+          <button
             key={card.key}
+            type="button"
             onClick={() => onSelect(card.key)}
-            className={`relative cursor-pointer rounded-[32px] bg-white overflow-hidden transition-all duration-400 ease-out hover:-translate-y-1 group p-2 ${
-              isSelected ? "ring-1 ring-primary/20 shadow-[0_8px_30px_-10px_rgba(0,0,0,0.1)] bg-primary/[0.02]" : "border border-black/[0.04] bg-[#FAFAFA] hover:shadow-[0_8px_30px_-10px_rgba(0,0,0,0.05)] hover:bg-white"
+            className={`group relative overflow-hidden rounded-[28px] border p-4 text-left transition-all duration-300 ease-out hover:-translate-y-0.5 sm:p-5 ${
+              isSelected
+                ? "border-primary/20 bg-primary/[0.035] shadow-[0_12px_32px_-16px_rgba(0,0,0,0.18)]"
+                : "border-black/[0.05] bg-[#FBFBFA] hover:border-black/10 hover:bg-white hover:shadow-[0_12px_30px_-18px_rgba(0,0,0,0.16)]"
             }`}
             style={{ animationDelay: `${idx * 40}ms` }}
           >
-            {isSelected && (
-              <div className="absolute top-4 left-4 z-10 w-7 h-7 rounded-full bg-primary flex items-center justify-center animate-scale-in shadow-sm">
-                <Check className="h-4 w-4 text-white" />
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-black/[0.04] bg-white shadow-sm transition-transform duration-300 ${isSelected ? "scale-105 ring-4 ring-primary/5" : "group-hover:scale-105"}`}>
+                  <Icon className={`h-6 w-6 ${card.accentColor}`} />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-lg leading-none">{meta.icon}</span>
+                    <h3
+                      className="text-[15px] font-bold text-foreground"
+                      style={{ fontFamily: "'Playfair Display', serif" }}
+                    >
+                      {meta.label}
+                    </h3>
+                    {card.badge && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-black/5 px-2 py-0.5 text-[10px] font-medium text-foreground/70">
+                        <Sparkles className="h-2.5 w-2.5" /> {card.badge}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {meta.shortDescription}
+                  </p>
+                </div>
               </div>
-            )}
-
-            {card.badge && (
-              <div className="absolute top-4 right-4 z-10">
-                <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-black/5 text-foreground/70 backdrop-blur-md">
-                  <Sparkles className="h-2.5 w-2.5" /> {card.badge}
-                </span>
-              </div>
-            )}
-
-            <div className={`bg-transparent rounded-[24px] flex items-center justify-center py-10 transition-colors`}>
-              <div className={`w-20 h-20 rounded-full bg-white flex items-center justify-center shadow-sm border border-black/[0.03] transition-transform duration-500 ease-out ${isSelected ? 'scale-110 shadow-md ring-4 ring-primary/5' : 'group-hover:scale-110 group-hover:shadow-md'}`}>
-                <Icon className={`h-10 w-10 ${card.accentColor}`} />
+              <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 transition-all ${
+                isSelected ? "border-primary bg-primary" : "border-black/12 bg-white"
+              }`}>
+                {isSelected && <Check className="h-3.5 w-3.5 text-white" strokeWidth={3} />}
               </div>
             </div>
 
-            <div className="p-4">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-xl">{meta.icon}</span>
-                <h3
-                  className="text-base font-bold"
-                  style={{ fontFamily: "'Playfair Display', serif" }}
+            <div className="mt-4 flex flex-wrap gap-2">
+              {meta.features.slice(0, 2).map((feature) => (
+                <span
+                  key={feature}
+                  className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
+                    isSelected ? "bg-primary/10 text-primary" : "bg-black/[0.035] text-foreground/70"
+                  }`}
                 >
-                  {meta.label}
-                </h3>
-              </div>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                {meta.description}
-              </p>
-              <div className="mt-3 text-[11px] font-semibold text-primary/80 tracking-wide">
-                {meta.shortDescription}
-              </div>
+                  {feature}
+                </span>
+              ))}
             </div>
-          </div>
+            <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+              {meta.description}
+            </p>
+            {isSelected && (
+              <div className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary">
+                <Check className="h-3 w-3" />
+                Sélectionné
+              </div>
+            )}
+          </button>
         );
       })}
     </div>
